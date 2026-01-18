@@ -1,12 +1,16 @@
 <!DOCTYPE html>
 <html>
 <body>
-<h3>PoC – Token Exposure Verification</h3>
+<h3>PoC – Post‑Login Redirect Confirmation</h3>
 <pre id="out"></pre>
 
 <script>
-document.getElementById("out").innerText =
-  "document.cookie:\n\n" + document.cookie;
+document.getElementById("out").innerText = JSON.stringify({
+  location: location.href,
+  referrer: document.referrer,
+  cookie_visible_from_attacker_origin: document.cookie || "[empty by browser design]",
+  note: "WebMD cookies are not accessible cross-domain (Same-Origin Policy)"
+}, null, 2);
 </script>
 </body>
 </html>
