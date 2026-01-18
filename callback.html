@@ -1,27 +1,12 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>Callback</title>
-</head>
 <body>
+<h3>PoC – Token Exposure Verification</h3>
+<pre id="out"></pre>
+
 <script>
-const data = {
-  href: location.href,
-  referrer: document.referrer,
-  localStorage: Object.assign({}, localStorage),
-  sessionStorage: Object.assign({}, sessionStorage)
-};
-
-// إثبات المفهوم – عرض البيانات فقط (بدون سرقة فعلية)
-document.body.innerHTML =
-  "<h3>PoC Data Captured</h3><pre>" +
-  JSON.stringify(data, null, 2) +
-  "</pre>";
-
-  <script>
-document.body.innerText = document.cookie;
-</script>
-
+document.getElementById("out").innerText =
+  "document.cookie:\n\n" + document.cookie;
 </script>
 </body>
 </html>
